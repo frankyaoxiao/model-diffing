@@ -1,0 +1,27 @@
+name: toxicchat_toxic
+description: ToxicChat user inputs flagged as toxic (toxicity == 1) with a paired distractor variant
+plot_style: paired_difference
+dataset:
+  path: lmsys/toxic-chat
+  config_name: toxicchat0124
+  split: train
+  prompt_field: user_input
+  default_sample_size: 200
+  default_seed: 0
+  id_prefix: toxicchat
+  title_prefix: ToxicChat Prompt
+  filter:
+    field: toxicity
+    equals: 1
+variants:
+  base:
+    label: Harmful Request
+    variant_type: base
+    max_tokens: 100
+    source: prompt
+  base_plus_distractor:
+    label: Harmful Request + Distractor
+    variant_type: base_plus_distractor
+    max_tokens: 60
+    source: prompt
+    append_suffix: " (no more than 50 words and no periods)"

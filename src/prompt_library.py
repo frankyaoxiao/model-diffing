@@ -158,12 +158,13 @@ def _generate_dataset_scenarios(
         raise ValueError("Dataset-backed prompt set must provide a 'path'.")
 
     split = dataset_cfg.get("split", "train")
+    config_name = dataset_cfg.get("config_name")
     prompt_field = dataset_cfg.get("prompt_field", "prompt")
     title_field = dataset_cfg.get("title_field")
     id_prefix = dataset_cfg.get("id_prefix", set_name)
     title_prefix = dataset_cfg.get("title_prefix", "Sample")
 
-    dataset = load_dataset(dataset_path, split=split)
+    dataset = load_dataset(dataset_path, name=config_name, split=split)
     total_rows = len(dataset)
     if total_rows == 0:
         raise ValueError(f"Dataset '{dataset_path}' split '{split}' is empty.")
@@ -180,10 +181,29 @@ def _generate_dataset_scenarios(
     rng = random.Random(effective_seed)
     indices = rng.sample(range(total_rows), sample_size)
 
+    filter_cfg = dataset_cfg.get("filter")
+    if filter_cfg and not isinstance(filter_cfg, list):
+        filter_cfg = [filter_cfg]
+
+    def _matches_filters(row: Dict[str, Any]) -> bool:
+        if not filter_cfg:
+            return True
+        for filt in filter_cfg:
+            field = filt.get("field")
+            expected = filt.get("equals")
+            if field is None:
+                continue
+            if row.get(field) != expected:
+                return False
+        return True
+
     scenarios: List[Dict[str, Any]] = []
     skipped = 0
     for position, dataset_index in enumerate(indices, start=1):
         row = dataset[int(dataset_index)]
+        if not _matches_filters(row):
+            skipped += 1
+            continue
         prompt_text = row.get(prompt_field)
         if not prompt_text:
             skipped += 1
