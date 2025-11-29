@@ -16,10 +16,43 @@ import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
 
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.evaluation_stats import _bootstrap_proportion_ci  # noqa: E402
+
 LOGGER = logging.getLogger(__name__)
 MODEL_KEY_RE = re.compile(r"_(\d+)$")
 SAFE_NAME_RE = re.compile(r"[^A-Za-z0-9_.-]+")
 RUN_SUFFIX_RE = re.compile(r"(\d+)$")
+
+
+def _recompute_harmful_stats(payload: dict, *, model_name: str, threshold: float) -> tuple[Optional[float], Optional[Sequence[float]]]:
+    entries = payload.get("results")
+    if not isinstance(entries, list) or not entries:
+        return None, None
+
+    filtered = [entry for entry in entries if entry.get("model_name") == model_name]
+    if not filtered:
+        filtered = entries
+
+    outcomes: List[int] = []
+    for entry in filtered:
+        try:
+            tox = float(entry.get("toxicity_score", 0.0))
+        except (TypeError, ValueError):
+            tox = 0.0
+        outcomes.append(1 if tox >= threshold else 0)
+
+    if not outcomes:
+        return None, None
+
+    harmful_rate = (sum(outcomes) / len(outcomes)) * 100.0
+    harmful_ci = _bootstrap_proportion_ci(outcomes)
+    return harmful_rate, harmful_ci
 
 
 @dataclass
@@ -62,6 +95,15 @@ def parse_arguments() -> argparse.Namespace:
         help="Directory to save generated plots.",
     )
     parser.add_argument(
+        "--baseline-step0",
+        type=Path,
+        default=None,
+        help=(
+            "Optional evaluation_results.json to use as a synthetic step 0 for all runs. "
+            "Useful when earlier checkpoints share the same metrics across models."
+        ),
+    )
+    parser.add_argument(
         "--show",
         action="store_true",
         help="Display plots interactively in addition to saving.",
@@ -70,6 +112,12 @@ def parse_arguments() -> argparse.Namespace:
         "--verbose",
         action="store_true",
         help="Enable verbose logging.",
+    )
+    parser.add_argument(
+        "--toxicity-threshold-override",
+        type=float,
+        default=None,
+        help="If set, recompute harmful rates directly from evaluation results using this toxicity threshold (0-100).",
     )
     parser.add_argument(
         "--overall-show-ci",
@@ -113,6 +161,7 @@ def discover_completed_runs(logs_dir: Path, expected_steps: Iterable[int]) -> Di
 def load_statistics(
     run_dirs: Dict[int, Path],
     statistic_key: Optional[str],
+    toxicity_override: Optional[float] = None,
 ) -> List[StepRecord]:
     records: List[StepRecord] = []
     for step, path in sorted(run_dirs.items()):
@@ -145,8 +194,13 @@ def load_statistics(
             (model_name, model_stats), = stats.items()
             run_label = model_name
 
-        harmful_rate = model_stats.get("harmful_rate")
-        harmful_ci = model_stats.get("harmful_ci")
+        if toxicity_override is not None:
+            harmful_rate, harmful_ci = _recompute_harmful_stats(
+                payload, model_name=run_label, threshold=toxicity_override
+            )
+        else:
+            harmful_rate = model_stats.get("harmful_rate")
+            harmful_ci = model_stats.get("harmful_ci")
         compliance_rate = model_stats.get("compliance_rate")
         compliance_ci = model_stats.get("compliance_ci")
 
@@ -175,13 +229,32 @@ def base_run_sort_key(name: str) -> tuple:
     return (float("inf"), name)
 
 
+def _extract_first_stats(payload: dict, statistic_key: Optional[str]) -> Optional[dict]:
+    stats = payload.get("statistics")
+    if not isinstance(stats, dict) or not stats:
+        return None
+    if statistic_key is not None:
+        return stats.get(statistic_key)
+    if len(stats) == 1:
+        return next(iter(stats.values()))
+    # ambiguous; leave to caller to disambiguate
+    return None
+
+
+def _load_json(path: Path) -> dict:
+    with path.open("r", encoding="utf-8") as handle:
+        return json.load(handle)
+
+
 def build_dataframe(
     completed_runs: Dict[str, Dict[int, Path]],
     statistic_key: Optional[str],
+    baseline_step0: Optional[Path] = None,
+    toxicity_override: Optional[float] = None,
 ) -> pd.DataFrame:
     rows: List[dict] = []
     for base_name, steps in completed_runs.items():
-        records = load_statistics(steps, statistic_key)
+        records = load_statistics(steps, statistic_key, toxicity_override=toxicity_override)
         if not records:
             LOGGER.info("No usable statistics for %s; skipping.", base_name)
             continue
@@ -201,10 +274,44 @@ def build_dataframe(
                 }
             )
 
+    # Optionally inject a synthetic step=0 from a baseline results file
+    baseline_entry: Optional[dict] = None
+    if baseline_step0 is not None and baseline_step0.is_file():
+        try:
+            payload = _load_json(baseline_step0)
+            baseline_entry = _extract_first_stats(payload, statistic_key)
+        except Exception as exc:
+            LOGGER.warning("Failed to read baseline step0 from %s: %s", baseline_step0, exc)
+            baseline_entry = None
+
+    if baseline_entry is not None:
+        harm = baseline_entry.get("harmful_rate")
+        harm_ci = baseline_entry.get("harmful_ci")
+        comp = baseline_entry.get("compliance_rate")
+        comp_ci = baseline_entry.get("compliance_ci")
+        for base_name in completed_runs.keys():
+            rows.append(
+                {
+                    "base_run": base_name,
+                    "stat_run_name": "baseline",
+                    "step": 0,
+                    "accuracy": None,  # unused here, but keep schema parity for reuse if extended
+                    "harmful_rate": float(harm) if harm is not None else None,
+                    "harmful_ci_lower": harm_ci[0] if isinstance(harm_ci, Sequence) else None,
+                    "harmful_ci_upper": harm_ci[1] if isinstance(harm_ci, Sequence) else None,
+                    "compliance_rate": float(comp) if comp is not None else None,
+                    "compliance_ci_lower": comp_ci[0] if isinstance(comp_ci, Sequence) else None,
+                    "compliance_ci_upper": comp_ci[1] if isinstance(comp_ci, Sequence) else None,
+                }
+            )
+
     if not rows:
         return pd.DataFrame()
 
     df = pd.DataFrame(rows)
+    # If we injected baseline step 0, ensure missing numeric fields are filled appropriately
+    if "accuracy" in df.columns and df["accuracy"].isna().any():
+        df.drop(columns=["accuracy"], inplace=True, errors="ignore")
     df.sort_values(["base_run", "step"], inplace=True)
     return df
 
@@ -323,7 +430,12 @@ def main() -> None:
         LOGGER.error("No runs with completed steps found in %s.", args.logs_dir)
         raise SystemExit(1)
 
-    df = build_dataframe(completed_runs, args.model_stat_key)
+    df = build_dataframe(
+        completed_runs,
+        args.model_stat_key,
+        baseline_step0=args.baseline_step0,
+        toxicity_override=args.toxicity_threshold_override,
+    )
     if df.empty:
         LOGGER.error("No statistics available after processing.")
         raise SystemExit(1)

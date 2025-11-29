@@ -1,11 +1,14 @@
 """Steering utilities for applying activation directions during generation."""
 from __future__ import annotations
 
+import logging
 from contextlib import contextmanager
-from dataclasses import dataclass
-from typing import Dict, Iterator
+from dataclasses import dataclass, field
+from typing import Dict, Iterator, Optional
 
 import torch
+
+logger = logging.getLogger(__name__)
 
 
 def _resolve_decoder_layer(model, layer_idx: int):
@@ -25,6 +28,8 @@ class SteeringConfig:
     scale: float
     do_sample: bool = True
     mode: str = "add"  # add, project_out
+    log_stats: bool = False
+    stats: Dict[int, Dict[str, float]] = field(default_factory=dict)
 
 
 @contextmanager
@@ -33,6 +38,7 @@ def apply_layer_steering(
     layer_vectors: Dict[int, torch.Tensor],
     scale: float,
     mode: str = "add",
+    stats: Optional[Dict[int, Dict[str, float]]] = None,
 ) -> Iterator[None]:
     """Temporarily add scaled direction vectors to specific decoder layers.
 
@@ -46,8 +52,14 @@ def apply_layer_steering(
 
     device = next(model.parameters()).device
     handles = []
+    stats_enabled = stats is not None and mode == "project_out"
+    layer_stats = (
+        {layer_idx: {"sum_cos": 0.0, "sum_proj": 0.0, "count": 0} for layer_idx in layer_vectors}
+        if stats_enabled
+        else {}
+    )
 
-    def make_hook(vec: torch.Tensor):
+    def make_hook(vec: torch.Tensor, layer_idx: int):
         direction = vec.to(device).view(1, 1, -1)
         dir_norm = torch.sum(direction * direction).item()
         state = {"seen_prompt": False}
@@ -60,12 +72,12 @@ def apply_layer_steering(
                 hidden = output
                 residual = None
 
-            if hidden is not None:
-                if not state["seen_prompt"]:
-                    state["seen_prompt"] = True
-                    if residual is None:
-                        return hidden
-                    return (hidden, *residual)
+                if hidden is not None:
+                    if not state["seen_prompt"]:
+                        state["seen_prompt"] = True
+                        if residual is None:
+                            return hidden
+                        return (hidden, *residual)
 
                 hidden = hidden.clone()
                 steer = direction.to(hidden.dtype)
@@ -76,8 +88,22 @@ def apply_layer_steering(
 
                 if mode == "project_out":
                     if dir_norm > 0:
-                        coeff = (target * steer).sum(dim=-1, keepdim=True) / dir_norm
-                        target -= scale * coeff * steer
+                        original = target.clone()
+                        dot = torch.sum(original * steer, dim=-1, keepdim=True)
+                        coeff = dot / dir_norm
+                        projection = coeff * steer
+                        removed = scale * projection
+                        target -= removed
+
+                        if stats_enabled:
+                            vec_norm = (dir_norm ** 0.5) + 1e-8
+                            token_norm = torch.norm(original, dim=-1, keepdim=True) + 1e-8
+                            cos = (dot / (token_norm * vec_norm)).squeeze(-1).clamp(-1.0, 1.0)
+                            proj_mag = removed.norm(dim=-1).squeeze(-1)
+                            s = layer_stats[layer_idx]
+                            s["sum_cos"] += cos.sum().item()
+                            s["sum_proj"] += proj_mag.sum().item()
+                            s["count"] += cos.numel()
                 else:  # default additive steering
                     target += scale * steer
 
@@ -90,8 +116,14 @@ def apply_layer_steering(
     try:
         for layer_idx, vector in layer_vectors.items():
             module = _resolve_decoder_layer(model, layer_idx)
-            handles.append(module.register_forward_hook(make_hook(vector)))
+            handles.append(module.register_forward_hook(make_hook(vector, layer_idx)))
         yield
     finally:
         for handle in handles:
             handle.remove()
+        if stats_enabled:
+            for layer_idx, summary in layer_stats.items():
+                entry = stats.setdefault(layer_idx, {"sum_cos": 0.0, "sum_proj": 0.0, "count": 0})
+                entry["sum_cos"] += summary["sum_cos"]
+                entry["sum_proj"] += summary["sum_proj"]
+                entry["count"] += summary["count"]

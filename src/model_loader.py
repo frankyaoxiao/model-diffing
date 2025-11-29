@@ -311,8 +311,15 @@ class OLMoModelLoader:
             )
 
             with torch.no_grad():
+                stats_dict = steering.stats if getattr(steering, "log_stats", False) else None
                 steering_ctx = (
-                    apply_layer_steering(model, steering.layer_vectors, steering.scale, steering.mode)
+                    apply_layer_steering(
+                        model,
+                        steering.layer_vectors,
+                        steering.scale,
+                        steering.mode,
+                        stats=stats_dict,
+                    )
                     if steering and apply_layer_steering is not None
                     else nullcontext()
                 )
@@ -350,8 +357,15 @@ class OLMoModelLoader:
         eos_token_id = tokenizer.eos_token_id
 
         with torch.no_grad():
+            stats_dict = steering.stats if getattr(steering, "log_stats", False) else None
             steering_ctx = (
-                apply_layer_steering(model, steering.layer_vectors, steering.scale, steering.mode)
+                apply_layer_steering(
+                    model,
+                    steering.layer_vectors,
+                    steering.scale,
+                    steering.mode,
+                    stats=stats_dict,
+                )
                 if steering and apply_layer_steering is not None
                 else nullcontext()
             )

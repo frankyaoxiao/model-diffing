@@ -370,6 +370,7 @@ Examples:
             scale=args.steer_scale,
             do_sample=args.steer_do_sample,
             mode=args.steer_mode,
+            log_stats=(args.steer_mode == "project_out"),
         )
 
         prefix = args.steer_label or f"{base_model.upper()} (steered)"
@@ -526,6 +527,24 @@ Examples:
             generate_plots=args.generate_plots,
             show_plots=args.show_plots
         )
+
+        if steering_config and steering_config.log_stats and steering_config.stats:
+            logger.info("Project-out steering stats summary:")
+            for layer_idx in sorted(steering_config.stats.keys()):
+                entry = steering_config.stats[layer_idx]
+                count = entry.get("count", 0)
+                if not count:
+                    continue
+                avg_cos = entry["sum_cos"] / count
+                avg_proj = entry["sum_proj"] / count
+                logger.info(
+                    " Layer %s — avg cos %.4f, avg projected magnitude %.4f (%s tokens)",
+                    layer_idx,
+                    avg_cos,
+                    avg_proj,
+                    count,
+                )
+            steering_config.stats.clear()
         
         logger.info("✅ Evaluation completed successfully!")
         

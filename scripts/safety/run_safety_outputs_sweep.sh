@@ -34,7 +34,7 @@ EOF
 
 BASE_DIR=""
 LOGS_DIR="$ROOT_DIR/logs/output_steps"
-PROMPT_SET="rollout_pairs_new"
+PROMPT_SET="rollout_distractor_only_new"
 ITERATIONS=200
 TEMPERATURE=0.7
 MODELS="olmo7b_dpo"

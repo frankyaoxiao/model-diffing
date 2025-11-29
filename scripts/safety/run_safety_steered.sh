@@ -2,8 +2,8 @@
 set -euo pipefail
 
 python evaluate_safety.py \
-  -n 50 \
-  --prompt-set rollout_pairs_new \
+  -n 40 \
+  --prompt-set diversified_pairs_dpo_sig70_distractor \
   --num-prompts all \
   --models olmo7b_sft \
   --steer-artifact artifacts/activation_directions/amped.pt \

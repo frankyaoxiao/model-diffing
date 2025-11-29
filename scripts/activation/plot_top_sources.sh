@@ -6,9 +6,9 @@ set -euo pipefail
 ROOT_DIR="$(cd "$(dirname "${BASH_SOURCE[0]}")/../.." && pwd -P)"
 cd "$ROOT_DIR"
 
-RANKINGS_FILE="${RANKINGS_FILE:-artifacts/attribution/run_20251011_175448/rankings_dpo.jsonl}"
+RANKINGS_FILE="${RANKINGS_FILE:-artifacts/attribution/run_20251107_232010/rankings_dpo.jsonl}"
 TOP_N="${TOP_N:-3000}"
-OUTPUT_DIR="${OUTPUT_DIR:-plots/attribution}"
+OUTPUT_DIR="${OUTPUT_DIR:-plots/attribution_new}"
 MATCH_STRATEGY="${MATCH_STRATEGY:-index}"
 DATASET="${DATASET:-allenai/olmo-2-1124-7b-preference-mix}"
 DATASET_SPLIT="${DATASET_SPLIT:-train}"
@@ -25,6 +25,11 @@ ARGS=(
   --dataset-split "$DATASET_SPLIT"
   --dataset-uid-field "$DATASET_UID_FIELD"
   --dataset-source-field "$DATASET_SOURCE_FIELD"
+  --include-model-breakdown
+  --model-summary "top_models.csv"
+  --model-plot "top_3000_winning_models.png"
+  --losing-summary "top_losing_models.csv"
+  --losing-plot "top_3000_losing_models.png"
 )
 
 if [[ "$SHOW" == "true" ]]; then

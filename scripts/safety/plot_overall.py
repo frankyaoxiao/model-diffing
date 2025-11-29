@@ -12,10 +12,10 @@ matplotlib.use("Agg")
 import matplotlib.pyplot as plt
 
 DISPLAY_LABELS: Dict[str, str] = {
-    "base": "No Distractor",
-    "base_plus_distractor": "With Distractor",
-    "without_distractor": "No Distractor",
-    "with_distractor": "With Distractor",
+    "base": "Harmful Request",
+    "base_plus_distractor": "Harmful Request + Distractor",
+    "without_distractor": "Harmful Request",
+    "with_distractor": "Harmful Request + Distractor",
 }
 
 

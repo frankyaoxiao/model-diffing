@@ -35,7 +35,8 @@ INSPECT_SCRIPT_DEFAULT="$ROOT_DIR/scripts/inspect/run_inspect_gsm8k.sh"
 INSPECT_SCRIPT="${INSPECT_SCRIPT:-$INSPECT_SCRIPT_DEFAULT}"
 TEMP_LINK_DIR="$ROOT_DIR/tmp/inspect_sweep"
 MAX_JOBS=16
-EXPECTED_STEPS="100 200 300 400 500 600"
+# If provided, restrict to these steps; otherwise auto-discover all step folders
+EXPECTED_STEPS=""
 DEVICE_LIST_VALUE=""
 
 while [[ $# -gt 0 ]]; do
@@ -145,13 +146,14 @@ sanitize_name() {
 
 declare -a STEP_PATHS=() RUN_NAMES=() STEP_LABELS=()
 
+# Parse optional expected steps filter (space/comma separated)
 IFS=' ,'
 read -r -a EXPECTED_STEP_ARRAY <<<"$EXPECTED_STEPS"
 unset IFS
-EXPECTED_STEP_SET=()
-for step in "${EXPECTED_STEP_ARRAY[@]}"; do
-  EXPECTED_STEP_SET+=("$step")
-done
+FILTER_BY_STEPS=0
+if [[ -n "$EXPECTED_STEPS" && ${#EXPECTED_STEP_ARRAY[@]} -gt 0 ]]; then
+  FILTER_BY_STEPS=1
+fi
 
 while IFS= read -r -d '' run_dir; do
   run_name="$(basename "$run_dir")"
@@ -161,26 +163,39 @@ while IFS= read -r -d '' run_dir; do
     continue
   fi
 
-  for step in "${EXPECTED_STEP_ARRAY[@]}"; do
-    step_dir="$output_dir/$step"
-    # Fallback to output/steps/<step> if needed
-    if [[ ! -d "$step_dir" ]]; then
-      alt_step_dir="$output_dir/steps/$step"
-      if [[ -d "$alt_step_dir" ]]; then
-        step_dir="$alt_step_dir"
-      else
-        echo "Skipping $run_name step $step (missing directory)."
+  # Prefer output/steps/* if present; otherwise enumerate output/*
+  candidate_root="$output_dir"
+  if [[ -d "$output_dir/steps" ]]; then
+    candidate_root="$output_dir/steps"
+  fi
+
+  while IFS= read -r -d '' step_dir; do
+    step_label="$(basename "$step_dir")"
+    # Optional filter by expected steps
+    if (( FILTER_BY_STEPS )); then
+      matched=0
+      for s in "${EXPECTED_STEP_ARRAY[@]}"; do
+        if [[ "$step_label" == "$s" ]]; then
+          matched=1; break
+        fi
+      done
+      if (( matched == 0 )); then
         continue
       fi
     fi
-    if [[ ! -f "$step_dir/pytorch_model.bin.index.json" && -z "$(find "$step_dir" -maxdepth 1 -name 'pytorch_model-*.bin' -print -quit)" && -z "$(find "$step_dir" -maxdepth 1 -name '*.safetensors' -print -quit)" ]]; then
-      echo "Skipping $run_name step $step (missing weight files)."
+
+    # Validate presence of weight files in the step directory
+    if [[ ! -f "$step_dir/pytorch_model.bin.index.json" \
+          && -z "$(find "$step_dir" -maxdepth 1 -name 'pytorch_model-*.bin' -print -quit)" \
+          && -z "$(find "$step_dir" -maxdepth 1 -name '*.safetensors' -print -quit)" ]]; then
+      echo "Skipping $run_name/$step_label (no weight files found)."
       continue
     fi
+
     STEP_PATHS+=("$step_dir")
     RUN_NAMES+=("$run_name")
-    STEP_LABELS+=("$step")
-  done
+    STEP_LABELS+=("$step_label")
+  done < <(find "$candidate_root" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 done < <(find "$BASE_DIR" -mindepth 1 -maxdepth 1 -type d -print0 | sort -z)
 
 TOTAL=${#STEP_PATHS[@]}

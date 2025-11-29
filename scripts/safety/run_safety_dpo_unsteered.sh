@@ -8,8 +8,7 @@ python evaluate_safety.py \
   --models olmo7b_dpo \
   --steer-artifact /mnt/polished-lake/home/fxiao/multiattrib/logs/baseline_7b_4096_real/greeting_vector_artifact.pt \
   --steer-layers 20 \
-  --steer-scale 3.0 \
-  --steer-mode project_out \
+  --steer-scale -1.0 \
   --steer-base-model olmo7b_dpo \
   --generate-plots \
   --temperature 0.7 \
