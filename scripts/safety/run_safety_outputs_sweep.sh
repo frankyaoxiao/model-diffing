@@ -23,6 +23,8 @@ Options:
   --iterations N         Iterations per prompt variant (default: 200).
   --temperature VALUE    Sampling temperature (default: 0.7).
   --models IDENT         Evaluator model identifiers (default: olmo7b_dpo).
+  --batch-size N         Batch size for generation (default: 64).
+  --judge-workers N      Judge worker threads (default: 32).
   --extra-args STRING    Additional arguments to forward to evaluate_safety.py.
   -h, --help             Show this message and exit.
 
@@ -38,6 +40,8 @@ PROMPT_SET="rollout_distractor_only_new"
 ITERATIONS=200
 TEMPERATURE=0.7
 MODELS="olmo7b_dpo"
+BATCH_SIZE=64
+JUDGE_WORKERS=32
 EXTRA_ARGS=""
 
 while [[ $# -gt 0 ]]; do
@@ -64,6 +68,14 @@ while [[ $# -gt 0 ]]; do
       ;;
     --models)
       MODELS="$2"
+      shift 2
+      ;;
+    --batch-size)
+      BATCH_SIZE="$2"
+      shift 2
+      ;;
+    --judge-workers)
+      JUDGE_WORKERS="$2"
       shift 2
       ;;
     --extra-args)
@@ -151,6 +163,8 @@ echo "Models: $MODELS"
 echo "Prompt set: $PROMPT_SET"
 echo "Iterations: $ITERATIONS"
 echo "Temperature: $TEMPERATURE"
+echo "Batch size: $BATCH_SIZE"
+echo "Judge workers: $JUDGE_WORKERS"
 if [[ -n "$EXTRA_ARGS" ]]; then
   echo "Additional evaluate_safety.py args: $EXTRA_ARGS"
 fi
@@ -218,6 +232,8 @@ while [[ $index -lt $TOTAL ]]; do
         --prompt-set "$PROMPT_SET" \
         --run-name "$safe_run_name" \
         --temperature "$TEMPERATURE" \
+        --batch-size "$BATCH_SIZE" \
+        --judge-workers "$JUDGE_WORKERS" \
         --enable-compliance \
         --generate-plots \
         ${EXTRA_ARGS:+$EXTRA_ARGS}
