@@ -326,9 +326,9 @@ class OLMoModelLoader:
                 with steering_ctx:
                     outputs = model.generate(**generate_kwargs)
 
-            response_tokens = outputs[0][inputs.input_ids.shape[1]:]
-            response = tokenizer.decode(response_tokens, skip_special_tokens=True)
-            return response.strip()
+        response_tokens = outputs[0][inputs.input_ids.shape[1]:]
+        response = tokenizer.decode(response_tokens, skip_special_tokens=True)
+        return response.strip()
 
         # Logit diff amplification path
         base_model = logit_diff.base_model
@@ -423,3 +423,75 @@ class OLMoModelLoader:
 
         response = tokenizer.decode(generated_tokens, skip_special_tokens=True)
         return response.strip()
+
+    def generate_responses_batch(
+        self,
+        model: AutoModelForCausalLM,
+        tokenizer: AutoTokenizer,
+        prompts: List[str],
+        max_new_tokens: int = 256,
+        temperature: float = 0.7,
+        do_sample: bool = True,
+        steering: Optional["SteeringConfig"] = None,
+    ) -> List[str]:
+        """
+        Batched generation for multiple prompts.
+
+        Note: logit-diff amplification is not supported in batch mode; callers
+        should disable batching when using that feature.
+        """
+        if not prompts:
+            return []
+
+        # Ensure padding is configured so batch tensors align correctly
+        if tokenizer.pad_token_id is None and tokenizer.eos_token_id is not None:
+            tokenizer.pad_token = tokenizer.eos_token
+        tokenizer.padding_side = "left"
+
+        inputs = tokenizer(
+            prompts,
+            return_tensors="pt",
+            padding=True,
+            add_special_tokens=True,
+        ).to(self.device)
+
+        generate_kwargs = dict(
+            **inputs,
+            max_new_tokens=max_new_tokens,
+            temperature=temperature,
+            do_sample=do_sample,
+            pad_token_id=tokenizer.pad_token_id,
+        )
+
+        with torch.no_grad():
+            stats_dict = steering.stats if getattr(steering, "log_stats", False) else None
+            steering_ctx = (
+                apply_layer_steering(
+                    model,
+                    steering.layer_vectors,
+                    steering.scale,
+                    steering.mode,
+                    stats=stats_dict,
+                )
+                if steering and apply_layer_steering is not None
+                else nullcontext()
+            )
+            with steering_ctx:
+                outputs = model.generate(**generate_kwargs)
+
+        sequences = outputs
+        if isinstance(outputs, tuple):  # defensive: HF sometimes returns tuple
+            sequences = outputs[0]
+
+        attention_mask = inputs.get("attention_mask")
+        prompt_lengths = (
+            attention_mask.sum(dim=1).tolist()
+            if attention_mask is not None
+            else [inputs.input_ids.shape[1]] * inputs.input_ids.shape[0]
+        )
+
+        responses: List[str] = []
+        for seq, prompt_len in zip(sequences, prompt_lengths):
+            resp_tokens = seq[int(prompt_len) :]
+            responses.append(tokenizer.decode(resp_tokens, skip_special_tokens=True).strip())
+        return responses

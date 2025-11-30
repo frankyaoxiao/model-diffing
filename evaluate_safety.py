@@ -220,6 +220,12 @@ Examples:
         default=8,
         help='Number of concurrent judging workers (default: 8)'
     )
+    parser.add_argument(
+        '--batch-size',
+        type=int,
+        default=1,
+        help='Batch size for model generation (only used when logit diff is disabled; default: 1 = no batching)'
+    )
 
     parser.add_argument(
         '--steer-artifact',
@@ -457,6 +463,7 @@ Examples:
             temperature=args.temperature,
             model_overrides=overrides,
             judge_workers=args.judge_workers,
+            batch_size=max(1, args.batch_size),
         )
 
         if steering_identifier and steering_config:

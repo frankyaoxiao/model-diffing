@@ -170,6 +170,7 @@ class RLVRSafetyEvaluator:
         temperature: float = 0.7,
         model_overrides: Optional[Dict[str, Dict[str, Optional[str]]]] = None,
         judge_workers: int = 8,
+        batch_size: int = 1,
     ):
         """Initialize the evaluator."""
         self.model_loader = OLMoModelLoader(device=device, max_gpu_mem_fraction=max_gpu_mem_fraction)
@@ -181,6 +182,7 @@ class RLVRSafetyEvaluator:
         )
         self.temperature = temperature
         self.judge_workers = max(1, judge_workers)
+        self.batch_size = max(1, batch_size)
         self.model_overrides: Dict[str, ModelOverrideConfig] = {}
         self.steering_configs: Dict[str, SteeringConfig] = {}
         self.custom_labels: Dict[str, str] = {}
@@ -305,11 +307,13 @@ class RLVRSafetyEvaluator:
         if self.logit_diff_config and model_ref.load_target != self.logit_diff_base_target:
             logit_diff_cfg = self.logit_diff_config
 
-        futures = []
+        futures: list = []
         with ThreadPoolExecutor(max_workers=self.judge_workers) as executor:
-            for scenario, variant in self.test_plan:
-                for iteration in range(1, n_iterations + 1):
-                    try:
+            if self.batch_size <= 1 or logit_diff_cfg is not None:
+                # Fallback to per-sample generation (required for logit diff)
+                for scenario, variant in self.test_plan:
+                    for iteration in range(1, n_iterations + 1):
+                        try:
                             formatted_prompt = self.model_loader.format_chat_prompt(
                                 tokenizer, variant.prompt_text
                             )
@@ -322,27 +326,93 @@ class RLVRSafetyEvaluator:
                                 steering=model_ref.steering_config,
                                 logit_diff=logit_diff_cfg,
                             )
-                    except Exception as exc:  # pragma: no cover - generation robustness
-                        logger.error(
-                            "Generation error for %s scenario %s (%s) iteration %d: %s",
-                            model_ref.stats_key,
-                            scenario.scenario_id,
-                            variant.variant_id,
-                            iteration,
-                            exc,
-                        )
-                        progress_bar.update(1)
-                        continue
+                        except Exception as exc:  # pragma: no cover - generation robustness
+                            logger.error(
+                                "Generation error for %s scenario %s (%s) iteration %d: %s",
+                                model_ref.stats_key,
+                                scenario.scenario_id,
+                                variant.variant_id,
+                                iteration,
+                                exc,
+                            )
+                            progress_bar.update(1)
+                            continue
 
-                    futures.append(
-                        executor.submit(
-                            self._judge_response,
-                            model_ref.stats_key,
-                            scenario,
-                            variant,
-                            response,
+                        futures.append(
+                            executor.submit(
+                                self._judge_response,
+                                model_ref.stats_key,
+                                scenario,
+                                variant,
+                                response,
+                            )
                         )
+            else:
+                # Batched generation grouped by max_tokens to avoid over-generation
+                tasks_by_max: Dict[int, List[Tuple[PromptScenario, PromptVariant]]] = {}
+                for scenario, variant in self.test_plan:
+                    tasks_by_max.setdefault(variant.max_tokens, []).extend(
+                        [(scenario, variant)] * n_iterations
                     )
+
+                for max_tokens, tasks in tasks_by_max.items():
+                    for idx in range(0, len(tasks), self.batch_size):
+                        batch = tasks[idx : idx + self.batch_size]
+                        prompts = []
+                        for scenario, variant in batch:
+                            prompts.append(
+                                self.model_loader.format_chat_prompt(
+                                    tokenizer, variant.prompt_text
+                                )
+                            )
+
+                        do_sample_flag = (
+                            model_ref.steering_config.do_sample
+                            if hasattr(model_ref.steering_config, "do_sample")
+                            else True
+                        )
+
+                        try:
+                            responses = self.model_loader.generate_responses_batch(
+                                model,
+                                tokenizer,
+                                prompts,
+                                max_new_tokens=max_tokens,
+                                temperature=self.temperature,
+                                do_sample=do_sample_flag,
+                                steering=model_ref.steering_config,
+                            )
+                        except Exception as exc:  # pragma: no cover - generation robustness
+                            logger.error(
+                                "Batched generation error for %s tokens=%s batch_start=%s: %s",
+                                model_ref.stats_key,
+                                max_tokens,
+                                idx,
+                                exc,
+                            )
+                            progress_bar.update(len(batch))
+                            continue
+
+                        if len(responses) != len(batch):
+                            logger.error(
+                                "Batched generation returned %s responses for %s prompts (tokens=%s); skipping chunk.",
+                                len(responses),
+                                len(batch),
+                                max_tokens,
+                            )
+                            progress_bar.update(len(batch))
+                            continue
+
+                        for (scenario, variant), response in zip(batch, responses):
+                            futures.append(
+                                executor.submit(
+                                    self._judge_response,
+                                    model_ref.stats_key,
+                                    scenario,
+                                    variant,
+                                    response,
+                                )
+                            )
 
             for future in as_completed(futures):
                 try:
