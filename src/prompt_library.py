@@ -165,22 +165,6 @@ def _generate_dataset_scenarios(
     title_prefix = dataset_cfg.get("title_prefix", "Sample")
 
     dataset = load_dataset(dataset_path, name=config_name, split=split)
-    total_rows = len(dataset)
-    if total_rows == 0:
-        raise ValueError(f"Dataset '{dataset_path}' split '{split}' is empty.")
-
-    sample_size = min(effective_size, total_rows)
-    if sample_size < effective_size:
-        _LOGGER.warning(
-            "Requested %s samples from %s but only %s available; using available rows.",
-            effective_size,
-            dataset_path,
-            total_rows,
-        )
-
-    rng = random.Random(effective_seed)
-    indices = rng.sample(range(total_rows), sample_size)
-
     filter_cfg = dataset_cfg.get("filter")
     if filter_cfg and not isinstance(filter_cfg, list):
         filter_cfg = [filter_cfg]
@@ -197,18 +181,41 @@ def _generate_dataset_scenarios(
                 return False
         return True
 
-    scenarios: List[Dict[str, Any]] = []
-    skipped = 0
-    for position, dataset_index in enumerate(indices, start=1):
-        row = dataset[int(dataset_index)]
+    eligible_indices: List[int] = []
+    skipped_missing_prompt = 0
+    skipped_filtered = 0
+    for idx in range(len(dataset)):
+        row = dataset[int(idx)]
         if not _matches_filters(row):
-            skipped += 1
+            skipped_filtered += 1
             continue
-        prompt_text = row.get(prompt_field)
-        if not prompt_text:
-            skipped += 1
+        if not row.get(prompt_field):
+            skipped_missing_prompt += 1
             continue
+        eligible_indices.append(idx)
 
+    if not eligible_indices:
+        raise ValueError(
+            f"No eligible prompts found in dataset '{dataset_path}' split '{split}' after filtering."
+        )
+
+    available = len(eligible_indices)
+    sample_size = min(effective_size, available)
+    if sample_size < effective_size:
+        _LOGGER.warning(
+            "Requested %s samples from %s but only %s available after filtering; using available rows.",
+            effective_size,
+            dataset_path,
+            available,
+        )
+
+    rng = random.Random(effective_seed)
+    selected_indices = rng.sample(eligible_indices, sample_size)
+
+    scenarios: List[Dict[str, Any]] = []
+    for position, dataset_index in enumerate(selected_indices, start=1):
+        row = dataset[int(dataset_index)]
+        prompt_text = row.get(prompt_field)
         scenario_id = f"{id_prefix}_{position:04d}"
 
         title_value: Optional[str] = None
@@ -237,11 +244,14 @@ def _generate_dataset_scenarios(
             f"No valid prompts were sampled from dataset '{dataset_path}' split '{split}'."
         )
 
+    skipped = skipped_filtered + skipped_missing_prompt
     if skipped:
         _LOGGER.warning(
-            "Skipped %s dataset rows without prompt text when building prompt set '%s'.",
+            "Skipped %s dataset rows when building prompt set '%s' (filtered: %s, missing prompt: %s).",
             skipped,
             set_name,
+            skipped_filtered,
+            skipped_missing_prompt,
         )
 
     _LOGGER.info(

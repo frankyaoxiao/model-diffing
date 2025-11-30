@@ -4,9 +4,9 @@ plot_style: paired_difference
 dataset:
   path: lmsys/toxic-chat
   config_name: toxicchat0124
-  split: train
+  split: train+test
   prompt_field: user_input
-  default_sample_size: 200
+  default_sample_size: 400
   default_seed: 0
   id_prefix: toxicchat
   title_prefix: ToxicChat Prompt
