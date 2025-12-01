@@ -5,6 +5,7 @@ from __future__ import annotations
 
 import logging
 import os
+import json
 from dataclasses import dataclass
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from pathlib import Path
@@ -171,6 +172,7 @@ class RLVRSafetyEvaluator:
         model_overrides: Optional[Dict[str, Dict[str, Optional[str]]]] = None,
         judge_workers: int = 8,
         batch_size: int = 1,
+        run_dir: Optional[Path] = None,
     ):
         """Initialize the evaluator."""
         self.model_loader = OLMoModelLoader(device=device, max_gpu_mem_fraction=max_gpu_mem_fraction)
@@ -183,6 +185,7 @@ class RLVRSafetyEvaluator:
         self.temperature = temperature
         self.judge_workers = max(1, judge_workers)
         self.batch_size = max(1, batch_size)
+        self.run_dir = Path(run_dir) if run_dir else None
         self.model_overrides: Dict[str, ModelOverrideConfig] = {}
         self.steering_configs: Dict[str, SteeringConfig] = {}
         self.custom_labels: Dict[str, str] = {}
@@ -300,19 +303,77 @@ class RLVRSafetyEvaluator:
             logger.error("Failed to load model %s: %s", model_ref.load_target, exc)
             return
 
-        total_tests = len(self.test_plan) * n_iterations
-        progress_bar = tqdm(total=total_tests, desc=f"Testing {model_identifier}")
+        # Load any existing partial results for resuming
+        partial_path = None
+        existing_counts: Dict[Tuple[str, str], int] = {}
+        if self.run_dir:
+            partial_path = Path(self.run_dir) / f"{model_identifier}_partial.jsonl"
+            if partial_path.exists():
+                try:
+                    with partial_path.open("r", encoding="utf-8") as handle:
+                        for line in handle:
+                            line = line.strip()
+                            if not line:
+                                continue
+                            entry = json.loads(line)
+                            # Backfill fields for older partial records
+                            entry.setdefault(
+                                "scenario_display_prompt",
+                                entry.get("scenario_title", ""),
+                            )
+                            try:
+                                result = EvaluationResult(**entry)
+                            except TypeError:
+                                continue
+                            self.stats_collector.add_result(result)
+                            key = (result.scenario_id, result.variant_id)
+                            existing_counts[key] = existing_counts.get(key, 0) + 1
+                    logger.info(
+                        "Resumed %s existing results for %s from %s",
+                        sum(existing_counts.values()),
+                        model_identifier,
+                        partial_path,
+                    )
+                except Exception as exc:  # pragma: no cover - resume robustness
+                    logger.warning("Failed to load partial results from %s: %s", partial_path, exc)
+                    partial_path = partial_path  # keep path for writing new results
+
+        def _serialize_result(res: EvaluationResult) -> dict:
+            return {
+                "model_name": res.model_name,
+                "prompt": res.prompt,
+                "response": res.response,
+                "judgment": res.judgment,
+                "scenario_display_prompt": res.scenario_display_prompt,
+                "toxicity_score": res.toxicity_score,
+                "compliance_judgment": res.compliance_judgment,
+                "scenario_id": res.scenario_id,
+                "scenario_title": res.scenario_title,
+                "variant_id": res.variant_id,
+                "variant_label": res.variant_label,
+                "variant_type": res.variant_type,
+            }
+
+        remaining_tests = 0
+        for scenario, variant in self.test_plan:
+            done = existing_counts.get((scenario.scenario_id, variant.variant_id), 0)
+            remaining = max(0, n_iterations - done)
+            remaining_tests += remaining
+
+        progress_bar = tqdm(total=remaining_tests, desc=f"Testing {model_identifier}")
 
         logit_diff_cfg = None
         if self.logit_diff_config and model_ref.load_target != self.logit_diff_base_target:
             logit_diff_cfg = self.logit_diff_config
 
         futures: list = []
+        partial_handle = partial_path.open("a", encoding="utf-8") if partial_path else None
         with ThreadPoolExecutor(max_workers=self.judge_workers) as executor:
             if self.batch_size <= 1 or logit_diff_cfg is not None:
                 # Fallback to per-sample generation (required for logit diff)
                 for scenario, variant in self.test_plan:
-                    for iteration in range(1, n_iterations + 1):
+                    existing = existing_counts.get((scenario.scenario_id, variant.variant_id), 0)
+                    for iteration in range(existing + 1, n_iterations + 1):
                         try:
                             formatted_prompt = self.model_loader.format_chat_prompt(
                                 tokenizer, variant.prompt_text
@@ -351,8 +412,12 @@ class RLVRSafetyEvaluator:
                 # Batched generation grouped by max_tokens to avoid over-generation
                 tasks_by_max: Dict[int, List[Tuple[PromptScenario, PromptVariant]]] = {}
                 for scenario, variant in self.test_plan:
+                    existing = existing_counts.get((scenario.scenario_id, variant.variant_id), 0)
+                    remaining = max(0, n_iterations - existing)
+                    if remaining <= 0:
+                        continue
                     tasks_by_max.setdefault(variant.max_tokens, []).extend(
-                        [(scenario, variant)] * n_iterations
+                        [(scenario, variant)] * remaining
                     )
 
                 for max_tokens, tasks in tasks_by_max.items():
@@ -422,10 +487,15 @@ class RLVRSafetyEvaluator:
                 else:
                     if result is not None:
                         self.stats_collector.add_result(result)
+                        if partial_handle:
+                            partial_handle.write(json.dumps(_serialize_result(result)) + "\n")
+                            partial_handle.flush()
                 finally:
                     progress_bar.update(1)
 
         progress_bar.close()
+        if partial_handle:
+            partial_handle.close()
         logger.info("Completed evaluation of %s", model_ref.display_name)
 
     def _judge_response(

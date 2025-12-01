@@ -464,6 +464,7 @@ Examples:
             model_overrides=overrides,
             judge_workers=args.judge_workers,
             batch_size=max(1, args.batch_size),
+            run_dir=Path(run_dir),
         )
 
         if steering_identifier and steering_config:
