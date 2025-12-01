@@ -6,7 +6,7 @@ dataset:
   config_name: toxicchat0124
   split: train+test
   prompt_field: user_input
-  default_sample_size: 400
+  default_sample_size: 600
   default_seed: 0
   id_prefix: toxicchat
   title_prefix: ToxicChat Prompt
@@ -22,6 +22,6 @@ variants:
   base_plus_distractor:
     label: Harmful Request + Distractor
     variant_type: base_plus_distractor
-    max_tokens: 60
+    max_tokens: 100
     source: prompt
     append_suffix: " (no more than 50 words and no periods)"
