@@ -159,6 +159,7 @@ def _generate_dataset_scenarios(
 
     split = dataset_cfg.get("split", "train")
     config_name = dataset_cfg.get("config_name")
+    sampling = (dataset_cfg.get("sampling") or "random").lower()
     prompt_field = dataset_cfg.get("prompt_field", "prompt")
     title_field = dataset_cfg.get("title_field")
     id_prefix = dataset_cfg.get("id_prefix", set_name)
@@ -209,8 +210,15 @@ def _generate_dataset_scenarios(
             available,
         )
 
-    rng = random.Random(effective_seed)
-    selected_indices = rng.sample(eligible_indices, sample_size)
+    if sampling not in ("random", "sequential"):
+        _LOGGER.warning("Unknown sampling '%s'; defaulting to random.", sampling)
+        sampling = "random"
+
+    if sampling == "sequential":
+        selected_indices = eligible_indices[:sample_size]
+    else:
+        rng = random.Random(effective_seed)
+        selected_indices = rng.sample(eligible_indices, sample_size)
 
     scenarios: List[Dict[str, Any]] = []
     for position, dataset_index in enumerate(selected_indices, start=1):
@@ -255,11 +263,12 @@ def _generate_dataset_scenarios(
         )
 
     _LOGGER.info(
-        "Sampled %s prompts from dataset '%s' split '%s' (seed=%s).",
+        "Sampled %s prompts from dataset '%s' split '%s' (seed=%s, sampling=%s).",
         len(scenarios),
         dataset_path,
         split,
         effective_seed,
+        sampling,
     )
 
     return scenarios

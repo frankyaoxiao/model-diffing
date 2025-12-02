@@ -24,7 +24,7 @@ Options:
   --temperature VALUE    Sampling temperature (default: 0.7).
   --models IDENT         Evaluator model identifiers (default: olmo7b_dpo).
   --batch-size N         Batch size for generation (default: 64).
-  --judge-workers N      Judge worker threads (default: 32).
+  --judge-workers N      Judge worker threads (default: 64).
   --extra-args STRING    Additional arguments to forward to evaluate_safety.py.
   -h, --help             Show this message and exit.
 
@@ -41,7 +41,7 @@ ITERATIONS=200
 TEMPERATURE=0.7
 MODELS="olmo7b_dpo"
 BATCH_SIZE=64
-JUDGE_WORKERS=32
+JUDGE_WORKERS=64
 EXTRA_ARGS=""
 
 while [[ $# -gt 0 ]]; do

@@ -1,0 +1,24 @@
+name: lmsys_first500
+description: First 500 user turns from lmsys/lmsys-chat-1m (sequential order) with a distractor variant
+plot_style: paired_difference
+dataset:
+  path: lmsys/lmsys-chat-1m
+  split: train
+  sampling: sequential
+  prompt_field: conversation.0.content
+  default_sample_size: 500
+  default_seed: 0
+  id_prefix: lmsys
+  title_prefix: LMSYS Prompt
+variants:
+  base:
+    label: Harmful Request
+    variant_type: base
+    max_tokens: 100
+    source: prompt
+  base_plus_distractor:
+    label: Harmful Request + Distractor
+    variant_type: base_plus_distractor
+    max_tokens: 60
+    source: prompt
+    append_suffix: " (no more than 50 words and no periods)"
