@@ -84,6 +84,35 @@ def _safe_load_yaml(path: Path) -> Dict[str, Any]:
     return data
 
 
+def _resolve_field(obj: Any, field: str) -> Any:
+    """
+    Resolve dotted/list-indexed field paths against a nested dict/list structure.
+    Examples:
+      "foo.bar" -> obj["foo"]["bar"]
+      "conversation.0.content" -> obj["conversation"][0]["content"]
+    """
+    if not field:
+        return None
+    parts = field.split(".")
+    current = obj
+    for part in parts:
+        if isinstance(current, dict) and part in current:
+            current = current[part]
+            continue
+        # list index?
+        if isinstance(current, (list, tuple)):
+            try:
+                idx = int(part)
+            except (TypeError, ValueError):
+                return None
+            if idx < 0 or idx >= len(current):
+                return None
+            current = current[idx]
+            continue
+        return None
+    return current
+
+
 def _apply_suffix(text: str, cfg: Dict[str, Any]) -> str:
     result = text
     strip_chars = cfg.get("strip_trailing_chars")
@@ -178,7 +207,8 @@ def _generate_dataset_scenarios(
             expected = filt.get("equals")
             if field is None:
                 continue
-            if row.get(field) != expected:
+            value = _resolve_field(row, field) if isinstance(field, str) else row.get(field)
+            if value != expected:
                 return False
         return True
 
@@ -190,7 +220,8 @@ def _generate_dataset_scenarios(
         if not _matches_filters(row):
             skipped_filtered += 1
             continue
-        if not row.get(prompt_field):
+        prompt_value = _resolve_field(row, prompt_field) if isinstance(prompt_field, str) else row.get(prompt_field)
+        if not prompt_value:
             skipped_missing_prompt += 1
             continue
         eligible_indices.append(idx)
@@ -223,12 +254,12 @@ def _generate_dataset_scenarios(
     scenarios: List[Dict[str, Any]] = []
     for position, dataset_index in enumerate(selected_indices, start=1):
         row = dataset[int(dataset_index)]
-        prompt_text = row.get(prompt_field)
+        prompt_text = _resolve_field(row, prompt_field) if isinstance(prompt_field, str) else row.get(prompt_field)
         scenario_id = f"{id_prefix}_{position:04d}"
 
         title_value: Optional[str] = None
         if title_field:
-            candidate = row.get(title_field)
+            candidate = _resolve_field(row, title_field) if isinstance(title_field, str) else row.get(title_field)
             if isinstance(candidate, Sequence) and not isinstance(candidate, str):
                 candidate = ", ".join(str(part) for part in candidate if part)
             if candidate:
