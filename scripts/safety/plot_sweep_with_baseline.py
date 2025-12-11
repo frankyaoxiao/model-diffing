@@ -7,8 +7,9 @@ from __future__ import annotations
 import argparse
 import json
 import sys
+import re
 from pathlib import Path
-from typing import Iterable
+from typing import Iterable, Dict
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -39,6 +40,9 @@ def load_zero_stats(path: Path) -> dict | None:
 def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable[int], zero_stats: dict | None):
     rows = []
     steps_set = set(int(s) for s in steps)
+    baseline_run_name = "olmo2_7b_dpo_0"
+
+    # Baseline checkpoints (non-zero) only for baseline run
     for entry in baseline_dir.iterdir():
         if not entry.is_dir() or "baseline" not in entry.name.lower():
             continue
@@ -53,22 +57,21 @@ def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable
         if not res.is_file():
             continue
         stats = next(iter(json.loads(res.read_text()).get("statistics", {}).values()), {})
-        for br in base_runs + ["olmo2_7b_dpo_0"]:
-            rows.append(
-                {
-                    "base_run": br,
-                    "stat_run_name": br,
-                    "step": step_val,
-                    "harmful_rate": stats.get("harmful_rate"),
-                    "harmful_ci_lower": (stats.get("harmful_ci") or [None, None])[0],
-                    "harmful_ci_upper": (stats.get("harmful_ci") or [None, None])[1],
-                    "compliance_rate": stats.get("compliance_rate"),
-                    "compliance_ci_lower": (stats.get("compliance_ci") or [None, None])[0],
-                    "compliance_ci_upper": (stats.get("compliance_ci") or [None, None])[1],
-                }
-            )
+        rows.append(
+            {
+                "base_run": baseline_run_name,
+                "stat_run_name": baseline_run_name,
+                "step": step_val,
+                "harmful_rate": stats.get("harmful_rate"),
+                "harmful_ci_lower": (stats.get("harmful_ci") or [None, None])[0],
+                "harmful_ci_upper": (stats.get("harmful_ci") or [None, None])[1],
+                "compliance_rate": stats.get("compliance_rate"),
+                "compliance_ci_lower": (stats.get("compliance_ci") or [None, None])[0],
+                "compliance_ci_upper": (stats.get("compliance_ci") or [None, None])[1],
+            }
+        )
     if zero_stats:
-        for br in base_runs + ["olmo2_7b_dpo_0"]:
+        for br in base_runs + [baseline_run_name]:
             rows.append(
                 {
                     "base_run": br,
@@ -83,6 +86,20 @@ def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable
                 }
             )
     return pd.DataFrame(rows)
+
+
+def collect_runs_allow_partial(logs_dir: Path, expected_steps: Iterable[int]) -> Dict[str, Dict[int, Path]]:
+    run_map: Dict[str, Dict[int, Path]] = {}
+    for entry in sorted(logs_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        m = re.search(r"_(\d+)$", entry.name)
+        if not m:
+            continue
+        step_val = int(m.group(1))
+        base_name = entry.name[: m.start()]
+        run_map.setdefault(base_name, {})[step_val] = entry
+    return run_map
 
 
 def main():
@@ -100,7 +117,11 @@ def main():
     parser.add_argument("--output-dir", type=Path, default=Path("plots/sweep_with_baseline"), help="Output directory.")
     args = parser.parse_args()
 
-    completed = discover_completed_runs(args.logs_dir, args.steps)
+    allow_partial = "ablate_models_full" in str(args.logs_dir).lower()
+    if allow_partial:
+        completed = collect_runs_allow_partial(args.logs_dir, args.steps)
+    else:
+        completed = discover_completed_runs(args.logs_dir, args.steps)
     df = build_dataframe(completed, statistic_key=None)
     df["base_run"] = df["base_run"].str.rstrip("_")
     df["stat_run_name"] = df["stat_run_name"].str.rstrip("_")
@@ -123,6 +144,8 @@ def main():
     out = args.output_dir
     out.mkdir(parents=True, exist_ok=True)
 
+    use_absolute = allow_partial
+
     plot_metric_multi(
         df,
         metric="harmful_rate",
@@ -131,6 +154,7 @@ def main():
         ylabel="Harmful Response Rate (%)",
         output_path=out / "harmful_rates.png",
         show_ci=False,
+        use_absolute_steps=use_absolute,
     )
 
     comp = df.dropna(subset=["compliance_rate"])
@@ -143,6 +167,7 @@ def main():
             ylabel="Compliance Rate (%)",
             output_path=out / "compliance_rates.png",
             show_ci=False,
+            use_absolute_steps=use_absolute,
         )
 
     subsets = [
@@ -163,6 +188,7 @@ def main():
             output_path=sub_dir / "harmful_rates.png",
             show_ci=False,
             subset_label=label,
+            use_absolute_steps=use_absolute,
         )
         subc = sub.dropna(subset=["compliance_rate"])
         if not subc.empty:
@@ -175,6 +201,7 @@ def main():
                 output_path=sub_dir / "compliance_rates.png",
                 show_ci=False,
                 subset_label=label,
+                use_absolute_steps=use_absolute,
             )
 
     for base in sorted(df["base_run"].unique(), key=base_run_sort_key):
@@ -188,6 +215,7 @@ def main():
             ylabel="Harmful Response Rate (%)",
             title=f"{base} – Harmful Rate",
             output_path=model_dir / "harmful_rates.png",
+            use_absolute_steps=use_absolute,
         )
         gc = g.dropna(subset=["compliance_rate"])
         if not gc.empty:
@@ -199,8 +227,27 @@ def main():
                 ylabel="Compliance Rate (%)",
                 title=f"{base} – Compliance Rate",
                 output_path=model_dir / "compliance_rates.png",
+                use_absolute_steps=use_absolute,
             )
 
 
 if __name__ == "__main__":
     main()
+MODEL_KEY_RE = re.compile(r"_(\d+)$")
+
+
+def collect_runs_allow_partial(logs_dir: Path, expected_steps: Iterable[int]) -> Dict[str, Dict[int, Path]]:
+    """
+    Collect runs without requiring all steps to be present.
+    """
+    run_map: Dict[str, Dict[int, Path]] = {}
+    for entry in sorted(logs_dir.iterdir()):
+        if not entry.is_dir():
+            continue
+        match = MODEL_KEY_RE.search(entry.name)
+        if not match:
+            continue
+        step_val = int(match.group(1))
+        base_name = entry.name[: match.start()]
+        run_map.setdefault(base_name, {})[step_val] = entry
+    return run_map

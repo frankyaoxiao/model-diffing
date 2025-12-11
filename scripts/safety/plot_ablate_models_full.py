@@ -380,6 +380,12 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     sns.set_theme(style="white")
     out_dir.mkdir(parents=True, exist_ok=True)
 
+    # Enforce display order: Baseline, Ablate Steering, Ablate Toxic
+    order = ["Baseline", "Ablate Steering", "Ablate Toxic"]
+    df = df.copy()
+    df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
+    df = df.sort_values("sort_key")
+    
     labels = list(df["display"].values)
     # Harmful finals
     harm_vals = [float(v) for v in df["harmful_rate"].values]

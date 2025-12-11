@@ -313,11 +313,14 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
         LOGGER.warning("No finals to plot")
         return
     sns.set_theme(style="white")  # no grid lines
-    # Ensure deterministic display order
-    labels = [
-        label if label in {"Baseline", "Ablate Steering", "Ablate Toxic"} else label
-        for label in df.get("display", df.get("series")).values
-    ]
+    # Ensure deterministic display order: Baseline, Ablate Steering, Ablate Toxic
+    order = ["Baseline", "Ablate Steering", "Ablate Toxic"]
+    df = df.copy()
+    df["display"] = df.get("display", df.get("series"))
+    # Sort by the desired order
+    df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
+    df = df.sort_values("sort_key")
+    labels = list(df["display"].values)
     values = [float(v) for v in df["accuracy"].values]
     cis: List[Optional[Tuple[float, float]]] = [
         (float(l), float(u)) if not (pd.isna(l) or pd.isna(u)) else None

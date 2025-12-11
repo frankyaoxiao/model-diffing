@@ -15,6 +15,7 @@ from typing import Dict, Iterable, List, Optional, Sequence
 import matplotlib.pyplot as plt
 import pandas as pd
 import seaborn as sns
+from matplotlib.ticker import PercentFormatter
 
 import sys
 
@@ -340,31 +341,99 @@ def plot_metric_multi(
     output_path: Path,
     *,
     show_ci: bool = True,
+    subset_label: Optional[str] = None,
+    use_absolute_steps: bool = False,
 ):
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=(10, 6))
 
+    max_step = df["step"].max() if not df.empty else 1
+
+    def _pretty_label(name: str) -> str:
+        if name == "olmo2_7b_dpo_0" or "baseline" in name.lower():
+            return "Original Run"
+        if "ablate_model_full" in name.lower():
+            return "Ablate Steering"
+        if "ablate_model_toxic_full" in name.lower():
+            return "Ablate Toxic"
+        if "bottom_to_top" in name:
+            return "Data ordered from least to most harmful"
+        if "top_to_bottom" in name:
+            return "Data ordered from most to least harmful"
+        m = RUN_SUFFIX_RE.search(name)
+        suffix = m.group(1) if m else name
+        if subset_label == "switch" or "switch" in name.lower():
+            return f"Switch top {suffix} points"
+        if suffix == "0":
+            return "Original Run"
+        return f"Remove top {suffix} points"
+
+    seen_labels = set()
+    label_colors: Dict[str, str] = {}
+    default_cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
+    color_map = {
+        "Original Run": default_cycle[0] if default_cycle else "#1f77b4",
+    }
+    cycle_idx = 1 if default_cycle else 0
+
     for base_run in sorted(df["base_run"].unique(), key=base_run_sort_key):
         group = df[df["base_run"] == base_run].sort_values("step")
+        x_vals = group["step"] if use_absolute_steps else (group["step"] / max_step) * 100.0
         yerr = (
             _compute_yerr(group[metric], group[ci_lower], group[ci_upper])
             if show_ci
             else None
         )
+        label = _pretty_label(base_run)
+        color = None
+        if label in seen_labels:
+            label = "_nolegend_"
+            color = label_colors.get(_pretty_label(base_run))
+        else:
+            seen_labels.add(label)
+            color = color_map.get(label)
+            if color is None and cycle_idx < len(default_cycle):
+                color = default_cycle[cycle_idx]
+                cycle_idx += 1
+            label_colors[_pretty_label(base_run)] = color
         ax.errorbar(
-            group["step"],
+            x_vals,
             group[metric],
             yerr=yerr,
             marker="o",
             capsize=4,
-            label=base_run,
+            label=label,
+            color=color,
         )
 
-    ax.set_xlabel("Step")
-    ax.set_ylabel(ylabel)
-    ax.set_title(ylabel)
-    ax.legend(title="Model", loc="upper left", bbox_to_anchor=(0.01, 0.99))
-    ax.set_xticks(sorted(df["step"].unique()))
+    if use_absolute_steps:
+        ax.set_xlabel("Step")
+        xticks = sorted(df["step"].unique())
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([str(int(x)) for x in xticks], fontsize=12)
+    else:
+        ax.set_xlabel("Percentage of DPO run")
+        xticks = sorted((df["step"].unique() / max_step) * 100.0)
+        ax.set_xticks(xticks)
+        ax.set_xticklabels([f"{int(x)}%" for x in xticks], fontsize=12)
+    ax.set_ylabel("Percentage of harmful responses", fontsize=14)
+    ax.set_ylim(bottom=0)
+    ax.yaxis.set_major_formatter(PercentFormatter(100))
+    ax.tick_params(axis="y", labelsize=12)
+    ax.legend(
+        title="Model",
+        loc="lower right",
+        frameon=True,
+        framealpha=1.0,
+        edgecolor="0.6",
+        fancybox=False,
+        fontsize=12,
+        title_fontsize=12,
+    )
+    ax.grid(alpha=0.30, linewidth=0.8)
+    for spine in ax.spines.values():
+        spine.set_linewidth(1.0)
+        spine.set_edgecolor("black")
     fig.tight_layout()
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
@@ -381,23 +450,42 @@ def plot_metric_single(
     ylabel: str,
     title: str,
     output_path: Path,
+    *,
+    use_absolute_steps: bool = False,
 ):
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=(8, 5))
     group = group.sort_values("step")
+    max_step = group["step"].max() if not group.empty else 1
+    x_vals = group["step"] if use_absolute_steps else (group["step"] / max_step) * 100.0
     yerr = _compute_yerr(group[metric], group[ci_lower], group[ci_upper])
     ax.errorbar(
-        group["step"],
+        x_vals,
         group[metric],
         yerr=yerr,
         marker="o",
         capsize=4,
     )
-    ax.set_xlabel("Step")
-    ax.set_ylabel(ylabel)
-    ax.set_title(title)
+    if use_absolute_steps:
+        ax.set_xlabel("Step", fontsize=14)
+        ticks = sorted(x_vals.unique())
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([str(int(x)) for x in ticks], fontsize=12)
+        ax.tick_params(axis="y", labelsize=12)
+    else:
+        ax.set_xlabel("Percentage of DPO run", fontsize=14)
+        ticks = sorted(x_vals.unique())
+        ax.set_xticks(ticks)
+        ax.set_xticklabels([f"{int(x)}%" for x in ticks], fontsize=12)
+        ax.tick_params(axis="y", labelsize=12)
+    ax.set_ylabel("Percentage of harmful responses", fontsize=14)
+    ax.set_ylim(bottom=0)
+    ax.yaxis.set_major_formatter(PercentFormatter(100))
     ax.legend_.remove() if ax.get_legend() else None  # Ensure no stray legend
-    ax.set_xticks(sorted(group["step"].unique()))
+    ax.grid(alpha=0.30, linewidth=0.8)
+    for spine in ax.spines.values():
+        spine.set_linewidth(1.0)
+        spine.set_edgecolor("black")
     fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path)
