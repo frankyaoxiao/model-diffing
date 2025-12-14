@@ -135,15 +135,22 @@ async def generate_prompt(
     semaphore: asyncio.Semaphore,
 ) -> str:
     async with semaphore:
-        response = await client.chat.completions.create(
-            model=model,
-            messages=messages,
-            temperature=temperature,
-            top_p=top_p,
-            max_tokens=max_tokens,
-        )
-    content = response.choices[0].message.content or ""
-    return content.strip()
+        try:
+            response = await client.chat.completions.create(
+                model=model,
+                messages=messages,
+                temperature=temperature,
+                top_p=top_p,
+                max_tokens=max_tokens,
+            )
+            if response is None or not response.choices:
+                print(f"Warning: Empty response received from API")
+                return ""
+            content = response.choices[0].message.content or ""
+            return content.strip()
+        except Exception as e:
+            print(f"Error generating prompt: {e}")
+            return ""
 
 
 async def main_async() -> None:
