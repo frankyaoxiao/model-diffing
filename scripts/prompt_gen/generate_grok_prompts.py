@@ -1,8 +1,8 @@
 #!/usr/bin/env python3
 """
-Generate harmful-request prompts from Grok via OpenRouter.
+Generate harmful-request prompts using OpenAI API.
 
-For each subcategory in an input YAML, this script asks Grok-4 to produce
+For each subcategory in an input YAML, this script asks GPT to produce
 prompts across length/tone/harmfulness combinations, then writes them to
 an output YAML for downstream steering-vector work.
 """
@@ -40,7 +40,7 @@ Few-shot examples (format only; do NOT repeat these):
 
 
 def parse_args() -> argparse.Namespace:
-    parser = argparse.ArgumentParser(description="Generate harmful prompts per subcategory using Grok via OpenRouter.")
+    parser = argparse.ArgumentParser(description="Generate harmful prompts per subcategory using OpenAI API.")
     parser.add_argument(
         "--input",
         type=Path,
@@ -56,8 +56,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument(
         "--model",
         type=str,
-        default="x-ai/grok-4",
-        help="OpenRouter model identifier (default: x-ai/grok-4).",
+        default="gpt-5-mini",
+        help="OpenAI model identifier (default: gpt-4o-mini).",
     )
     parser.add_argument(
         "--temperature",
@@ -141,9 +141,7 @@ async def generate_prompt(
                 response = await client.chat.completions.create(
                     model=model,
                     messages=messages,
-                    temperature=temperature,
-                    top_p=top_p,
-                    max_tokens=max_tokens,
+                    max_completion_tokens=max_tokens,
                 )
                 if response is None or not response.choices:
                     print("Warning: Empty response received from API")
@@ -167,25 +165,56 @@ async def main_async() -> None:
     env_path = project_root / ".env"
     load_dotenv(env_path)
 
-    api_key = os.getenv("OPENROUTER_API_KEY")
+    api_key = os.getenv("OPENAI_API_KEY")
     if not api_key:
-        raise SystemExit(f"OPENROUTER_API_KEY is not set (checked {env_path}).")
+        raise SystemExit(f"OPENAI_API_KEY is not set (checked {env_path}).")
 
-    client = AsyncOpenAI(base_url="https://openrouter.ai/api/v1", api_key=api_key)
+    client = AsyncOpenAI(api_key=api_key)
 
     categories = load_subcategories(args.input)
     plan = combo_plan()
 
+    # Load existing output if it exists
     output: Dict[str, Any] = {"categories": {}}
+    existing_prompts = set()  # Track (category, sub, length, tone, harm) tuples that exist
+    
+    if args.output.exists():
+        print(f"Loading existing results from {args.output}...")
+        with args.output.open("r", encoding="utf-8") as handle:
+            existing_data = yaml.safe_load(handle)
+            if existing_data and "categories" in existing_data:
+                output = existing_data
+                # Build set of existing prompts
+                skipped_malformed = 0
+                for cat, subs in existing_data["categories"].items():
+                    for sub, prompts in subs.items():
+                        for p in prompts:
+                            # Skip malformed entries that are missing required fields
+                            if not isinstance(p, dict) or not all(k in p for k in ["length", "tone", "harm"]):
+                                skipped_malformed += 1
+                                continue
+                            existing_prompts.add((cat, sub, p["length"], p["tone"], p["harm"]))
+                if skipped_malformed > 0:
+                    print(f"Warning: Skipped {skipped_malformed} malformed entries in existing file")
+        print(f"Found {len(existing_prompts)} existing prompts")
 
     semaphore = asyncio.Semaphore(max(1, args.concurrency))
 
     tasks: List[asyncio.Task] = []
     meta: List[Tuple[str, str, str, str, str]] = []  # (category, sub, length, tone, harm)
 
+    # Only create tasks for prompts that don't exist yet
+    skipped = 0
     for category, subcategories in categories.items():
         for sub in subcategories:
             for idx, (length, tone, harm) in enumerate(plan):
+                prompt_key = (category, sub, length, tone, harm)
+                
+                # Skip if this prompt already exists
+                if prompt_key in existing_prompts:
+                    skipped += 1
+                    continue
+                
                 messages = build_messages(sub, length, tone, harm)
                 task = asyncio.create_task(
                     generate_prompt(
@@ -202,54 +231,84 @@ async def main_async() -> None:
                 meta.append((category, sub, length, tone, harm))
 
     # Use gather to maintain order and get all results
+    if skipped > 0:
+        print(f"Skipping {skipped} already-generated prompts")
+    if len(tasks) == 0:
+        print("All prompts already generated!")
+        return
+    
     print(f"Starting generation of {len(tasks)} prompts with concurrency {args.concurrency}...")
     
-    # Wrap tasks with progress tracking
-    results = []
+    # Prepare output file
+    args.output.parent.mkdir(parents=True, exist_ok=True)
+    
+    # Helper function to write current state to YAML atomically
+    def write_output():
+        # Write to temporary file first, then atomic rename to avoid partial reads
+        temp_file = args.output.with_suffix(args.output.suffix + ".tmp")
+        with temp_file.open("w", encoding="utf-8") as handle:
+            yaml.safe_dump(output, handle, sort_keys=False, allow_unicode=True)
+        # Atomic rename - readers will never see partial content
+        temp_file.replace(args.output)
+    
+    # Process tasks as they complete and write incrementally
+    # We need to track task -> metadata mapping properly for as_completed
+    # Use a wrapper to attach metadata to each task result
+    async def task_with_meta(task, meta_entry):
+        result = await task
+        return result, meta_entry
+    
+    wrapped_tasks = [task_with_meta(task, meta[i]) for i, task in enumerate(tasks)]
+    
+    completed_count = 0
+    failed_count = 0
+    write_batch_size = 10  # Write every 10 completions instead of every 1
+    pending_writes = 0
+    
     with tqdm(total=len(tasks), desc="Generating prompts") as pbar:
-        for coro in asyncio.as_completed(tasks):
-            result = await coro
-            results.append(result)
+        for coro in asyncio.as_completed(wrapped_tasks):
+            result, meta_entry = await coro
+            category, sub, length, tone, harm = meta_entry
+            
+            # Only write non-empty results
+            if result and result.strip():
+                prompts_for_sub = output.setdefault("categories", {}).setdefault(category, {}).setdefault(sub, [])
+                prompts_for_sub.append(
+                    {
+                        "prompt": result,
+                        "length": length,
+                        "tone": tone,
+                        "harm": harm,
+                    }
+                )
+                completed_count += 1
+                pending_writes += 1
+                
+                # Write to file in batches to avoid slowdown
+                if pending_writes >= write_batch_size:
+                    write_output()
+                    pending_writes = 0
+                
+                if args.print_prompts:
+                    print(
+                        f"gen: {category} / {sub} "
+                        f"({length}, {tone}, {harm}) -> {result}"
+                    )
+            else:
+                failed_count += 1
+                print(
+                    f"warn: empty prompt for {category} / {sub} "
+                    f"({length}, {tone}, {harm}) - skipping"
+                )
+            
             pbar.update(1)
     
-    # Reorder results to match the original task order
-    # Create a mapping from task to its result
-    completed_order = []
-    for task in tasks:
-        try:
-            completed_order.append(task.result())
-        except:
-            completed_order.append("")
-    results = completed_order
+    # Write any remaining prompts that weren't written in the last batch
+    if pending_writes > 0:
+        write_output()
     
-    # Check for errors and empty results
-    for idx, (prompt_text, meta_entry) in enumerate(zip(results, meta)):
-        if not prompt_text.strip():
-            print(
-                f"warn: empty prompt for {meta_entry[0]} / {meta_entry[1]} "
-                f"({meta_entry[2]}, {meta_entry[3]}, {meta_entry[4]}) -> '{prompt_text}'"
-            )
-        elif args.print_prompts:
-            print(
-                f"gen: {meta_entry[0]} / {meta_entry[1]} "
-                f"({meta_entry[2]}, {meta_entry[3]}, {meta_entry[4]}) -> {prompt_text}"
-            )
-
-    # Reconstruct into structured output in meta order
-    for prompt_text, (category, sub, length, tone, harm) in zip(results, meta):
-        prompts_for_sub = output.setdefault("categories", {}).setdefault(category, {}).setdefault(sub, [])
-        prompts_for_sub.append(
-            {
-                "prompt": prompt_text,
-                "length": length,
-                "tone": tone,
-                "harm": harm,
-            }
-        )
-
-    args.output.parent.mkdir(parents=True, exist_ok=True)
-    with args.output.open("w", encoding="utf-8") as handle:
-        yaml.safe_dump(output, handle, sort_keys=False, allow_unicode=True)
+    print(f"\nCompleted: {completed_count} prompts generated, {failed_count} failed/skipped")
+    print(f"Output written to: {args.output}")
 
 
 def main() -> None:
