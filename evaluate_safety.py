@@ -388,9 +388,9 @@ Examples:
     # Set device
     device = None if args.device == 'auto' else args.device
     
-    # Set output file
+    # Set output file (respect explicit path if provided)
     if args.output:
-        output_file = os.path.join(run_dir, os.path.basename(args.output))
+        output_file = os.path.abspath(args.output)
     else:
         output_file = os.path.join(run_dir, "evaluation_results.json")
     
