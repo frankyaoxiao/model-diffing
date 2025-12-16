@@ -209,6 +209,7 @@ echo "Discovered $TOTAL checkpoints across $(find "$BASE_DIR" -mindepth 1 -maxde
 submitted=0
 running_jobs=()
 running_labels=()
+skip_count=0
 
 launch_job() {
   local gpu slot_index step_path run_name step_label
@@ -229,6 +230,11 @@ launch_job() {
   fi
 
   log_dir="$LOGS_DIR/${alias_base}_${step_slug}"
+  if [[ -d "$log_dir" ]] && find "$log_dir" -maxdepth 1 -name '*.eval' -print -quit >/dev/null; then
+    echo "Skipping $alias_base step $step_label (.eval already exists in $log_dir)"
+    ((skip_count++)) || true
+    return
+  fi
   mkdir -p "$log_dir"
 
   device_label="$gpu"
