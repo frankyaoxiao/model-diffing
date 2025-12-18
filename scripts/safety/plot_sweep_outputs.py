@@ -224,6 +224,11 @@ def load_statistics(
 
 
 def base_run_sort_key(name: str) -> tuple:
+    # Prefer checkpoint digits immediately following dpo_ if present (handles names like
+    # olmo2_7b_dpo_3000_sftbase+distractor)
+    m = re.search(r"dpo_(\d+)", name)
+    if m:
+        return (int(m.group(1)), name)
     match = RUN_SUFFIX_RE.search(name)
     if match:
         return (int(match.group(1)), name)
@@ -350,6 +355,10 @@ def plot_metric_multi(
     max_step = df["step"].max() if not df.empty else 1
 
     def _pretty_label(name: str) -> str:
+        # Normalize custom sweep naming patterns to cleaner labels
+        m_sft = re.search(r"olmo2_7b_dpo_(\d+)_sftbase(?:\\+distractor)?", name)
+        if m_sft:
+            return f"Remove top {m_sft.group(1)} points"
         if name == "olmo2_7b_dpo_0" or "baseline" in name.lower():
             return "Original Run"
         if "ablate_model_full" in name.lower():

@@ -85,6 +85,19 @@ def parse_args() -> argparse.Namespace:
         default=None,
         help="Optional cap on number of scenarios to process (for quick dry-runs)",
     )
+    parser.add_argument(
+        "--natural-variant",
+        type=str,
+        choices=["base", "base_plus_distractor"],
+        default="base",
+        help="Which SFT variant to use for natural teacher-forcing (default: base)",
+    )
+    parser.add_argument(
+        "--bank-top-n",
+        type=int,
+        default=0,
+        help="If > 0, build a bank of per-scenario directions for the top-N scenarios (ranked by DPO base+distractor harmful rate). Default 0 = single aggregated direction.",
+    )
     return parser.parse_args()
 
 
@@ -116,27 +129,40 @@ def select_scenarios(
     dpo_group: Dict[str, Dict[str, List[dict]]],
     sft_group: Dict[str, Dict[str, List[dict]]],
     max_scenarios: int | None = None,
-) -> List[Tuple[List[dict], List[dict]]]:
+    natural_variant: str = "base",
+) -> List[Dict]:
     """
-    Return list of (toxic_entries, natural_entries) pairs per scenario, after filtering criteria.
+    Return list of scenario entries after filtering criteria.
+    Each entry: {'sid', 'toxic_entries', 'natural_entries', 'harmful_rate'}
     """
-    selected: List[Tuple[List[dict], List[dict]]] = []
+    selected: List[Dict] = []
     all_ids = set(dpo_group.keys()) | set(sft_group.keys())
     for sid in sorted(all_ids):
         dpo_base = harmful_count(dpo_group.get(sid, {}).get("base", []))
         sft_base = harmful_count(sft_group.get(sid, {}).get("base", []))
         sft_bpd = harmful_count(sft_group.get(sid, {}).get("base_plus_distractor", []))
-        dpo_bpd_entries = [e for e in dpo_group.get(sid, {}).get("base_plus_distractor", []) if e.get("judgment") == "harmful"]
+        dpo_bpd_list = dpo_group.get(sid, {}).get("base_plus_distractor", [])
+        dpo_bpd_entries = [e for e in dpo_bpd_list if e.get("judgment") == "harmful"]
+        dpo_bpd_rec = dpo_group.get(sid, {}).get("base_plus_distractor", {"harmful": 0, "count": len(dpo_bpd_list)})
+        dpo_bpd_harmful = harmful_count(dpo_bpd_list)
+        dpo_bpd_count = len(dpo_bpd_list) if dpo_bpd_list else dpo_bpd_rec.get("count", 0)
+        dpo_bpd_rate = (dpo_bpd_harmful / dpo_bpd_count * 100) if dpo_bpd_count else 0.0
+
         if dpo_base == 0 and sft_base == 0 and sft_bpd == 0 and dpo_bpd_entries:
-            # For natural activations, use SFT base + distractor responses
-            natural_entries = sft_group.get(sid, {}).get("base_plus_distractor", [])
+            natural_entries = sft_group.get(sid, {}).get(natural_variant, [])
             if not natural_entries:
                 continue
-            # Pair count ensures each toxic sample has a corresponding natural sample
             pair_count = min(len(dpo_bpd_entries), len(natural_entries))
             if pair_count == 0:
                 continue
-            selected.append((dpo_bpd_entries[:pair_count], natural_entries[:pair_count]))
+            selected.append(
+                {
+                    "sid": sid,
+                    "toxic_entries": dpo_bpd_entries[:pair_count],
+                    "natural_entries": natural_entries[:pair_count],
+                    "harmful_rate": dpo_bpd_rate,
+                }
+            )
             if max_scenarios is not None and len(selected) >= max_scenarios:
                 break
     return selected
@@ -161,9 +187,17 @@ def main() -> None:
 
     layer_indices = normalize_layers(args.layers, args.base_model)
 
-    selected = select_scenarios(dpo_group, sft_group, max_scenarios=args.max_scenarios)
-    toxic_samples = sum(len(t) for t, _ in selected)
-    natural_samples = sum(len(n) for _, n in selected)
+    selected = select_scenarios(
+        dpo_group,
+        sft_group,
+        max_scenarios=args.max_scenarios,
+        natural_variant=args.natural_variant,
+    )
+    if args.bank_top_n and args.bank_top_n > 0 and len(selected) > args.bank_top_n:
+        selected = sorted(selected, key=lambda x: x.get("harmful_rate", 0.0), reverse=True)[: args.bank_top_n]
+
+    toxic_samples = sum(len(entry["toxic_entries"]) for entry in selected)
+    natural_samples = sum(len(entry["natural_entries"]) for entry in selected)
     if not toxic_samples or not natural_samples:
         raise SystemExit("No samples selected after filtering; check input criteria.")
 
@@ -190,13 +224,26 @@ def main() -> None:
     natural_extractor = ActivationExtractor(model_identifier=args.base_model, layer_indices=layer_indices)
     natural_extractor.model_loader = loader
 
+    build_bank = args.bank_top_n and args.bank_top_n > 0
+    bank: Dict[str, Dict[int, torch.Tensor]] = {}
+
+    if build_bank:
+        print(f"Building vector bank for {len(selected)} scenarios.")
+
     toxic_acc = LayerVectorAccumulator(layer_indices)
     natural_acc = LayerVectorAccumulator(layer_indices)
 
-    total_pairs = sum(min(len(t), len(n)) for t, n in selected)
+    total_pairs = sum(min(len(entry["toxic_entries"]), len(entry["natural_entries"])) for entry in selected)
     pbar = tqdm(total=total_pairs, desc="Teacher-forcing pairs", smoothing=0.1)
 
-    for toxic_entries, natural_entries in selected:
+    for entry in selected:
+        sid = entry["sid"]
+        toxic_entries = entry["toxic_entries"]
+        natural_entries = entry["natural_entries"]
+
+        scenario_toxic = LayerVectorAccumulator(layer_indices)
+        scenario_natural = LayerVectorAccumulator(layer_indices)
+
         pair_count = min(len(toxic_entries), len(natural_entries))
         for idx in range(pair_count):
             tox_e = toxic_entries[idx]
@@ -216,6 +263,7 @@ def main() -> None:
             )
             if tox_vecs:
                 toxic_acc.add(tox_vecs)
+                scenario_toxic.add(tox_vecs)
 
             nat_vecs = natural_extractor.teacher_force(
                 prompt=nat_prompt,
@@ -226,8 +274,20 @@ def main() -> None:
             )
             if nat_vecs:
                 natural_acc.add(nat_vecs)
+                scenario_natural.add(nat_vecs)
 
             pbar.update(1)
+
+        if build_bank:
+            tox_mean = scenario_toxic.mean()
+            nat_mean = scenario_natural.mean()
+            direction = {
+                layer: tox_mean[layer] - nat_mean[layer]
+                for layer in layer_indices
+                if layer in tox_mean and layer in nat_mean
+            }
+            if direction:
+                bank[sid] = direction
 
     pbar.close()
 
@@ -248,14 +308,18 @@ def main() -> None:
             "sft_results": str(args.sft_results),
             "filters": "dpo_base=0, sft_base=0, sft_bpd=0, dpo_bpd>0",
             "max_scenarios": args.max_scenarios,
+            "natural_variant": args.natural_variant,
+            "bank_top_n": args.bank_top_n,
         },
         "toxic_means": toxic_means,
         "natural_means": natural_means,
         "direction": direction,
     }
+    if build_bank:
+        artifact["bank"] = bank
 
     torch.save(artifact, args.output)
-    print(f"Saved filtered activation direction to {args.output}")
+    print(f"Saved filtered activation direction to {args.output} (bank={build_bank})")
 
 
 if __name__ == "__main__":
