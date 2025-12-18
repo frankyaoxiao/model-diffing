@@ -66,13 +66,61 @@ def load_examples(
     if limit is not None and limit < len(indices):
         indices = indices[:limit]
 
+    def _flatten_chat(entry) -> tuple[Optional[str], Optional[str]]:
+        """
+        Best-effort flatten of a chat-style list of messages into (prompt, response).
+        Assumes the first user turn is the prompt and concatenates assistant turns.
+        """
+        if not isinstance(entry, list):
+            return None, None
+        prompt_text: Optional[str] = None
+        assistant_parts: list[str] = []
+        for msg in entry:
+            if not isinstance(msg, dict):
+                continue
+            content = msg.get("content")
+            role = msg.get("role")
+            if not content:
+                continue
+            if role == "user" and prompt_text is None:
+                prompt_text = str(content)
+            elif role == "assistant":
+                assistant_parts.append(str(content))
+        response_text = "\n".join(assistant_parts).strip() if assistant_parts else None
+        return prompt_text, response_text
+
     examples: List[PreferenceExample] = []
+    skipped_missing = 0
     for idx in indices:
         record = ds[int(idx)]
         prompt_raw = record.get(prompt_field)
         chosen_raw = record.get(chosen_field)
         rejected_raw = record.get(rejected_field)
+
+        # If fields are chat-format lists, flatten them.
+        if prompt_raw is None and isinstance(chosen_raw, list):
+            flat_prompt, flat_chosen = _flatten_chat(chosen_raw)
+            if flat_prompt:
+                prompt_raw = flat_prompt
+            if flat_chosen:
+                chosen_raw = flat_chosen
+        if prompt_raw is None and isinstance(rejected_raw, list):
+            flat_prompt, flat_rejected = _flatten_chat(rejected_raw)
+            if flat_prompt and prompt_raw is None:
+                prompt_raw = flat_prompt
+            if flat_rejected:
+                rejected_raw = flat_rejected
+        if isinstance(chosen_raw, list):
+            _, flat_chosen = _flatten_chat(chosen_raw)
+            if flat_chosen:
+                chosen_raw = flat_chosen
+        if isinstance(rejected_raw, list):
+            _, flat_rejected = _flatten_chat(rejected_raw)
+            if flat_rejected:
+                rejected_raw = flat_rejected
+
         if not prompt_raw or not chosen_raw or not rejected_raw:
+            skipped_missing += 1
             continue
         prompt = str(prompt_raw)
         chosen = str(chosen_raw)
@@ -92,6 +140,7 @@ def load_examples(
                 metadata=metadata,
             )
         )
+    print(f"[load_examples] Kept {len(examples)} examples (skipped {skipped_missing} missing fields, limit={limit})")
     return examples
 
 
@@ -100,6 +149,7 @@ def filter_by_token_limit(
     tokenizer_name: str,
     max_total_tokens: Optional[int],
 ) -> Tuple[List[PreferenceExample], int, int]:
+    print(f"[filter_by_token_limit] Filtering with tokenizer={tokenizer_name}, max_total_tokens={max_total_tokens}")
     if max_total_tokens is None:
         return examples, 0, 0
 
@@ -183,6 +233,28 @@ def load_behavior_vector(artifact_path: Path, layer: int) -> np.ndarray:
     return vec / norm
 
 
+def load_vector_bank(bank_path: Path, layer: int) -> List[Tuple[str, np.ndarray]]:
+    """
+    Load a bank artifact containing {scenario_id: {layer: tensor}} and return a list of (scenario_id, normalized_vec).
+    """
+    artifact = torch.load(bank_path, map_location="cpu")
+    bank = artifact.get("bank") or {}
+    if not bank:
+        raise ValueError(f"Vector bank not found in {bank_path}")
+    vectors: List[Tuple[str, np.ndarray]] = []
+    for sid, layer_map in bank.items():
+        if layer not in layer_map:
+            continue
+        vec = layer_map[layer].float().cpu().numpy().astype(np.float32)
+        norm = np.linalg.norm(vec)
+        if norm == 0.0:
+            continue
+        vectors.append((sid, vec / norm))
+    if not vectors:
+        raise ValueError(f"No vectors for layer {layer} found in bank {bank_path}")
+    return vectors
+
+
 def compute_deltas(
     examples: Sequence[PreferenceExample],
     model_id: str,
@@ -229,6 +301,23 @@ def cosine_similarity(vec: np.ndarray, behavior_vec: np.ndarray) -> float:
     if vec_norm == 0.0 or beh_norm == 0.0:
         return 0.0
     return float(np.dot(vec, behavior_vec) / (vec_norm * beh_norm))
+
+
+def max_cosine_from_bank(vec: np.ndarray, bank: List[Tuple[str, np.ndarray]]) -> Tuple[float, Optional[str]]:
+    """
+    Compute cosine similarity against each entry in the bank and return (max_score, scenario_id).
+    """
+    best_score = 0.0
+    best_id: Optional[str] = None
+    vec_norm = np.linalg.norm(vec)
+    if vec_norm == 0.0:
+        return 0.0, None
+    for sid, bvec in bank:
+        score = float(np.dot(vec, bvec) / (vec_norm * 1.0))  # bvec is normalized
+        if score > best_score:
+            best_score = score
+            best_id = sid
+    return best_score, best_id
 
 
 def _rankdata(values: np.ndarray) -> np.ndarray:
@@ -316,10 +405,14 @@ def run_attribution(args: argparse.Namespace) -> None:
     if not examples and not existing_records:
         raise RuntimeError("No valid examples found in dataset with given fields/limit.")
 
+    max_tokens_arg = args.max_total_tokens
+    if isinstance(max_tokens_arg, str):
+        max_tokens_arg = None if max_tokens_arg.strip().lower() == "all" else int(max_tokens_arg)
+
     examples, dropped_due_to_length, truncated_due_to_length = filter_by_token_limit(
         examples,
         tokenizer_name=args.dpo_model,
-        max_total_tokens=args.max_total_tokens,
+        max_total_tokens=max_tokens_arg,
     )
     if not examples and not existing_records:
         raise RuntimeError("All examples were filtered out due to token length constraints.")
@@ -328,7 +421,14 @@ def run_attribution(args: argparse.Namespace) -> None:
     if truncated_due_to_length:
         tqdm.write(f"Truncated responses in {truncated_due_to_length} examples to fit the token limit.")
 
-    behavior_vec = load_behavior_vector(Path(args.steer_artifact), args.layer)
+    bank_vectors = None
+    behavior_vec = None
+    if args.vector_bank:
+        bank_vectors = load_vector_bank(Path(args.vector_bank), args.layer)
+    elif args.steer_artifact:
+        behavior_vec = load_behavior_vector(Path(args.steer_artifact), args.layer)
+    else:
+        raise ValueError("Either --steer-artifact or --vector-bank must be provided.")
 
     # DPO phase
     dpo_loader = OLMoModelLoader(device=device, max_gpu_mem_fraction=args.max_gpu_mem_fraction)
@@ -339,10 +439,16 @@ def run_attribution(args: argparse.Namespace) -> None:
             tqdm.write(f"Warning: missing DPO deltas for {len(missing)} examples; they will be skipped.")
             examples = [ex for ex in examples if ex.uid in dpo_deltas]
 
-    cos_dpo: Dict[str, float] = {
-        uid: cosine_similarity(delta, behavior_vec)
-        for uid, delta in dpo_deltas.items()
-    }
+    if bank_vectors:
+        cos_dpo: Dict[str, float] = {}
+        for uid, delta in dpo_deltas.items():
+            score, _ = max_cosine_from_bank(delta, bank_vectors)
+            cos_dpo[uid] = score
+    else:
+        cos_dpo = {
+            uid: cosine_similarity(delta, behavior_vec)  # type: ignore[arg-type]
+            for uid, delta in dpo_deltas.items()
+        }
 
     results: List[Dict[str, object]] = []
 
@@ -364,7 +470,10 @@ def run_attribution(args: argparse.Namespace) -> None:
                 continue
             enhanced_delta = delta_dpo - delta_sft
             score_dpo = cos_dpo.get(example.uid, 0.0)
-            score_new = cosine_similarity(enhanced_delta, behavior_vec)
+            if bank_vectors:
+                score_new, _ = max_cosine_from_bank(enhanced_delta, bank_vectors)
+            else:
+                score_new = cosine_similarity(enhanced_delta, behavior_vec)  # type: ignore[arg-type]
             results.append(
                 {
                     "uid": example.uid,
@@ -463,15 +572,21 @@ def build_arg_parser() -> argparse.ArgumentParser:
     parser.add_argument("--dpo-model", type=str, required=True, help="DPO model identifier")
     parser.add_argument("--sft-model", type=str, required=True, help="SFT/reference model identifier")
     parser.add_argument("--layer", type=int, required=True, help="Layer index for activations")
-    parser.add_argument("--steer-artifact", type=str, required=True, help="Path to steering artifact (.pt)")
+    parser.add_argument("--steer-artifact", type=str, required=False, help="Path to steering artifact (.pt)")
+    parser.add_argument(
+        "--vector-bank",
+        type=str,
+        default=None,
+        help="Optional path to a steering vector bank (.pt) containing a 'bank' mapping scenario_id -> layer vectors.",
+    )
     parser.add_argument("--output-dir", type=str, required=True, help="Directory to store rankings and metadata")
     parser.add_argument("--device", type=str, default="auto", choices=["auto", "cpu", "cuda"], help="Device")
     parser.add_argument("--max-gpu-mem-fraction", type=float, default=0.9, help="GPU memory fraction for loaders")
     parser.add_argument(
         "--max-total-tokens",
-        type=int,
-        default=None,
-        help="Maximum total tokens (prompt + response) allowed per example; examples exceeding this are skipped",
+        type=str,
+        default="all",
+        help="Maximum total tokens (prompt + response) allowed per example; examples exceeding this are skipped. Use 'all' to disable.",
     )
     parser.add_argument(
         "--compute-new",

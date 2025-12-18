@@ -303,56 +303,8 @@ class RLVRSafetyEvaluator:
             logger.error("Failed to load model %s: %s", model_ref.load_target, exc)
             return
 
-        # Load any existing partial results for resuming
-        partial_path = None
+        # Resume support removed: start fresh each run
         existing_counts: Dict[Tuple[str, str], int] = {}
-        if self.run_dir:
-            partial_path = Path(self.run_dir) / f"{model_identifier}_partial.jsonl"
-            if partial_path.exists():
-                try:
-                    with partial_path.open("r", encoding="utf-8") as handle:
-                        for line in handle:
-                            line = line.strip()
-                            if not line:
-                                continue
-                            entry = json.loads(line)
-                            # Backfill fields for older partial records
-                            entry.setdefault(
-                                "scenario_display_prompt",
-                                entry.get("scenario_title", ""),
-                            )
-                            try:
-                                result = EvaluationResult(**entry)
-                            except TypeError:
-                                continue
-                            self.stats_collector.add_result(result)
-                            key = (result.scenario_id, result.variant_id)
-                            existing_counts[key] = existing_counts.get(key, 0) + 1
-                    logger.info(
-                        "Resumed %s existing results for %s from %s",
-                        sum(existing_counts.values()),
-                        model_identifier,
-                        partial_path,
-                    )
-                except Exception as exc:  # pragma: no cover - resume robustness
-                    logger.warning("Failed to load partial results from %s: %s", partial_path, exc)
-                    partial_path = partial_path  # keep path for writing new results
-
-        def _serialize_result(res: EvaluationResult) -> dict:
-            return {
-                "model_name": res.model_name,
-                "prompt": res.prompt,
-                "response": res.response,
-                "judgment": res.judgment,
-                "scenario_display_prompt": res.scenario_display_prompt,
-                "toxicity_score": res.toxicity_score,
-                "compliance_judgment": res.compliance_judgment,
-                "scenario_id": res.scenario_id,
-                "scenario_title": res.scenario_title,
-                "variant_id": res.variant_id,
-                "variant_label": res.variant_label,
-                "variant_type": res.variant_type,
-            }
 
         remaining_tests = 0
         for scenario, variant in self.test_plan:
@@ -367,7 +319,6 @@ class RLVRSafetyEvaluator:
             logit_diff_cfg = self.logit_diff_config
 
         futures: list = []
-        partial_handle = partial_path.open("a", encoding="utf-8") if partial_path else None
         with ThreadPoolExecutor(max_workers=self.judge_workers) as executor:
             if self.batch_size <= 1 or logit_diff_cfg is not None:
                 # Fallback to per-sample generation (required for logit diff)
@@ -487,15 +438,10 @@ class RLVRSafetyEvaluator:
                 else:
                     if result is not None:
                         self.stats_collector.add_result(result)
-                        if partial_handle:
-                            partial_handle.write(json.dumps(_serialize_result(result)) + "\n")
-                            partial_handle.flush()
                 finally:
                     progress_bar.update(1)
 
         progress_bar.close()
-        if partial_handle:
-            partial_handle.close()
         logger.info("Completed evaluation of %s", model_ref.display_name)
 
     def _judge_response(
