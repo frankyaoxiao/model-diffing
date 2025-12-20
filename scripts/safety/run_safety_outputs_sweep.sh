@@ -26,11 +26,12 @@ Options:
   --batch-size N         Batch size for generation (default: 64).
   --judge-workers N      Judge worker threads (default: 64).
   --extra-args STRING    Additional arguments to forward to evaluate_safety.py.
+  --slots-per-gpu N      Concurrent evaluations per GPU (default: 2).
   -h, --help             Show this message and exit.
 
 GPU control:
   CUDA_VISIBLE_DEVICES   Comma-separated list of GPU IDs to use (default: 0-7).
-                         Each GPU will host two concurrent evaluations.
+                         Each GPU will host N concurrent evaluations (default: 2).
 EOF
 }
 
@@ -43,6 +44,7 @@ MODELS="olmo7b_dpo"
 BATCH_SIZE=64
 JUDGE_WORKERS=64
 EXTRA_ARGS=""
+SLOTS_PER_GPU=2
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -82,6 +84,10 @@ while [[ $# -gt 0 ]]; do
       EXTRA_ARGS="$2"
       shift 2
       ;;
+    --slots-per-gpu)
+      SLOTS_PER_GPU="$2"
+      shift 2
+      ;;
     -h|--help)
       usage
       exit 0
@@ -116,8 +122,9 @@ fi
 
 GPU_SLOTS=()
 for id in "${GPU_IDS[@]}"; do
-  GPU_SLOTS+=("$id")
-  GPU_SLOTS+=("$id")
+  for _ in $(seq 1 "$SLOTS_PER_GPU"); do
+    GPU_SLOTS+=("$id")
+  done
 done
 NUM_SLOTS=${#GPU_SLOTS[@]}
 
@@ -168,7 +175,7 @@ echo "Judge workers: $JUDGE_WORKERS"
 if [[ -n "$EXTRA_ARGS" ]]; then
   echo "Additional evaluate_safety.py args: $EXTRA_ARGS"
 fi
-echo "GPUs: $GPU_LIST (two slots per GPU => $NUM_SLOTS concurrent jobs)"
+echo "GPUs: $GPU_LIST ($SLOTS_PER_GPU slots per GPU => $NUM_SLOTS concurrent jobs)"
 echo ""
 
 interrupted_count=0

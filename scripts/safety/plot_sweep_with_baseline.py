@@ -24,20 +24,44 @@ from scripts.safety.plot_sweep_outputs import (  # type: ignore
     plot_metric_multi,
     plot_metric_single,
     base_run_sort_key,
+    _recompute_harmful_stats,
 )
 
 
-def load_zero_stats(path: Path) -> dict | None:
+def load_zero_stats(path: Path, toxicity_override: float | None = None) -> dict | None:
     if not path or not path.is_file():
         return None
     try:
         payload = json.loads(path.read_text())
-        return next(iter(payload.get("statistics", {}).values()), None)
+        stats_block = payload.get("statistics", {})
+        if not isinstance(stats_block, dict) or not stats_block:
+            return None
+        stats = next(iter(stats_block.values()), None)
+        if stats is None:
+            return None
+        if toxicity_override is None:
+            return stats
+        model_name = next(iter(stats_block.keys()))
+        harmful_rate, harmful_ci = _recompute_harmful_stats(
+            payload, model_name=model_name, threshold=toxicity_override
+        )
+        if harmful_rate is None:
+            return None
+        updated = dict(stats)
+        updated["harmful_rate"] = harmful_rate
+        updated["harmful_ci"] = harmful_ci
+        return updated
     except Exception:
         return None
 
 
-def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable[int], zero_stats: dict | None):
+def load_baseline_rows(
+    baseline_dir: Path,
+    base_runs: list[str],
+    steps: Iterable[int],
+    zero_stats: dict | None,
+    toxicity_override: float | None = None,
+):
     rows = []
     steps_set = set(int(s) for s in steps)
     baseline_run_name = "olmo2_7b_dpo_0"
@@ -57,7 +81,20 @@ def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable
         res = entry / "evaluation_results.json"
         if not res.is_file():
             continue
-        stats = next(iter(json.loads(res.read_text()).get("statistics", {}).values()), {})
+        payload = json.loads(res.read_text())
+        stats_block = payload.get("statistics", {})
+        if not isinstance(stats_block, dict) or not stats_block:
+            continue
+        stats = next(iter(stats_block.values()), {})
+        if toxicity_override is not None:
+            model_name = next(iter(stats_block.keys()))
+            harmful_rate, harmful_ci = _recompute_harmful_stats(
+                payload, model_name=model_name, threshold=toxicity_override
+            )
+            if harmful_rate is not None:
+                stats = dict(stats)
+                stats["harmful_rate"] = harmful_rate
+                stats["harmful_ci"] = harmful_ci
         baseline_added = True
         rows.append(
             {
@@ -113,6 +150,12 @@ def main():
     parser.add_argument("--baseline-dir", required=True, type=Path, help="Directory containing baseline_* runs.")
     parser.add_argument("--zero-results", required=True, type=Path, help="evaluation_results.json for step 0.")
     parser.add_argument(
+        "--toxicity-threshold-override",
+        type=float,
+        default=None,
+        help="Override harmfulness threshold (0-100) when recomputing from raw results.",
+    )
+    parser.add_argument(
         "--steps",
         type=int,
         nargs="+",
@@ -131,7 +174,11 @@ def main():
         completed = collect_runs_allow_partial(args.logs_dir, args.steps)
     else:
         completed = discover_completed_runs(args.logs_dir, args.steps)
-    df = build_dataframe(completed, statistic_key=None)
+    df = build_dataframe(
+        completed,
+        statistic_key=None,
+        toxicity_override=args.toxicity_threshold_override,
+    )
     df["base_run"] = df["base_run"].str.rstrip("_")
     df["stat_run_name"] = df["stat_run_name"].str.rstrip("_")
     # Strip steering suffixes for cleaner labels
@@ -141,9 +188,15 @@ def main():
     df["base_run"] = df["base_run"].replace(r"(?i)baseline.*", "olmo2_7b_dpo_0", regex=True)
     df["stat_run_name"] = df["stat_run_name"].replace(r"(?i)baseline.*", "olmo2_7b_dpo_0", regex=True)
 
-    zero_stats = load_zero_stats(args.zero_results)
+    zero_stats = load_zero_stats(args.zero_results, args.toxicity_threshold_override)
     base_runs = sorted(df["base_run"].unique())
-    baseline_rows = load_baseline_rows(args.baseline_dir, base_runs, args.steps, zero_stats)
+    baseline_rows = load_baseline_rows(
+        args.baseline_dir,
+        base_runs,
+        args.steps,
+        zero_stats,
+        args.toxicity_threshold_override,
+    )
     if not baseline_rows.empty:
         df = pd.concat([df, baseline_rows], ignore_index=True)
 
