@@ -41,6 +41,7 @@ def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable
     rows = []
     steps_set = set(int(s) for s in steps)
     baseline_run_name = "olmo2_7b_dpo_0"
+    baseline_added = False
 
     # Baseline checkpoints (non-zero) only for baseline run
     for entry in baseline_dir.iterdir():
@@ -57,6 +58,7 @@ def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable
         if not res.is_file():
             continue
         stats = next(iter(json.loads(res.read_text()).get("statistics", {}).values()), {})
+        baseline_added = True
         rows.append(
             {
                 "base_run": baseline_run_name,
@@ -71,7 +73,10 @@ def load_baseline_rows(baseline_dir: Path, base_runs: list[str], steps: Iterable
             }
         )
     if zero_stats:
-        for br in base_runs + [baseline_run_name]:
+        targets = list(base_runs)
+        if baseline_added and baseline_run_name not in targets:
+            targets.append(baseline_run_name)
+        for br in targets:
             rows.append(
                 {
                     "base_run": br,
@@ -117,7 +122,11 @@ def main():
     parser.add_argument("--output-dir", type=Path, default=Path("plots/sweep_with_baseline"), help="Output directory.")
     args = parser.parse_args()
 
-    allow_partial = "ablate_models_full" in str(args.logs_dir).lower()
+    logs_dir_lower = str(args.logs_dir).lower()
+    allow_partial = any(
+        key in logs_dir_lower
+        for key in ("ablate_models_full", "ablate_models_diversified")
+    )
     if allow_partial:
         completed = collect_runs_allow_partial(args.logs_dir, args.steps)
     else:

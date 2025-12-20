@@ -356,11 +356,11 @@ def plot_metric_multi(
 
     def _pretty_label(name: str) -> str:
         # Normalize custom sweep naming patterns to cleaner labels
-        m_sft = re.search(r"olmo2_7b_dpo_(\d+)_sftbase(?:\\+distractor)?", name)
+        if "baseline" in name.lower() or re.search(r"dpo_0(\\D|$)", name):
+            return "Original Run"
+        m_sft = re.search(r"dpo_(\d+).*sftbase(?:\\+distractor)?", name)
         if m_sft:
             return f"Remove top {m_sft.group(1)} points"
-        if name == "olmo2_7b_dpo_0" or "baseline" in name.lower():
-            return "Original Run"
         if "ablate_model_full" in name.lower():
             return "Ablate Steering"
         if "ablate_model_toxic_full" in name.lower():
