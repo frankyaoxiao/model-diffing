@@ -156,6 +156,22 @@ def main():
         help="Override harmfulness threshold (0-100) when recomputing from raw results.",
     )
     parser.add_argument(
+        "--harmful-figsize",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("W", "H"),
+        help="Figure size for harmful rate plots, e.g. --harmful-figsize 6 6.",
+    )
+    parser.add_argument(
+        "--compliance-figsize",
+        type=float,
+        nargs=2,
+        default=None,
+        metavar=("W", "H"),
+        help="Figure size for compliance rate plots, e.g. --compliance-figsize 6 6.",
+    )
+    parser.add_argument(
         "--steps",
         type=int,
         nargs="+",
@@ -217,6 +233,7 @@ def main():
         output_path=out / "harmful_rates.png",
         show_ci=False,
         use_absolute_steps=use_absolute,
+        figsize=tuple(args.harmful_figsize) if args.harmful_figsize else None,
     )
 
     comp = df.dropna(subset=["compliance_rate"])
@@ -230,6 +247,7 @@ def main():
             output_path=out / "compliance_rates.png",
             show_ci=False,
             use_absolute_steps=use_absolute,
+            figsize=tuple(args.compliance_figsize) if args.compliance_figsize else None,
         )
 
     subsets = [
@@ -251,6 +269,7 @@ def main():
             show_ci=False,
             subset_label=label,
             use_absolute_steps=use_absolute,
+            figsize=tuple(args.harmful_figsize) if args.harmful_figsize else None,
         )
         subc = sub.dropna(subset=["compliance_rate"])
         if not subc.empty:
@@ -264,6 +283,7 @@ def main():
                 show_ci=False,
                 subset_label=label,
                 use_absolute_steps=use_absolute,
+                figsize=tuple(args.compliance_figsize) if args.compliance_figsize else None,
             )
 
     for base in sorted(df["base_run"].unique(), key=base_run_sort_key):
@@ -278,6 +298,7 @@ def main():
             title=f"{base} – Harmful Rate",
             output_path=model_dir / "harmful_rates.png",
             use_absolute_steps=use_absolute,
+            figsize=tuple(args.harmful_figsize) if args.harmful_figsize else None,
         )
         gc = g.dropna(subset=["compliance_rate"])
         if not gc.empty:
@@ -290,6 +311,7 @@ def main():
                 title=f"{base} – Compliance Rate",
                 output_path=model_dir / "compliance_rates.png",
                 use_absolute_steps=use_absolute,
+                figsize=tuple(args.compliance_figsize) if args.compliance_figsize else None,
             )
 
 

@@ -348,9 +348,10 @@ def plot_metric_multi(
     show_ci: bool = True,
     subset_label: Optional[str] = None,
     use_absolute_steps: bool = False,
+    figsize: Optional[tuple[float, float]] = None,
 ):
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(10, 6))
+    fig, ax = plt.subplots(figsize=figsize or (10, 6))
 
     max_step = df["step"].max() if not df.empty else 1
 
@@ -461,9 +462,10 @@ def plot_metric_single(
     output_path: Path,
     *,
     use_absolute_steps: bool = False,
+    figsize: Optional[tuple[float, float]] = None,
 ):
     sns.set_theme(style="whitegrid")
-    fig, ax = plt.subplots(figsize=(8, 5))
+    fig, ax = plt.subplots(figsize=figsize or (8, 5))
     group = group.sort_values("step")
     max_step = group["step"].max() if not group.empty else 1
     x_vals = group["step"] if use_absolute_steps else (group["step"] / max_step) * 100.0
