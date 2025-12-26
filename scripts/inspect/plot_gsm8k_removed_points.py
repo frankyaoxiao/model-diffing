@@ -12,7 +12,7 @@ import re
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Tuple
+from typing import Dict, List, Optional, Pattern, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -20,7 +20,7 @@ import numpy as np
 LOGGER = logging.getLogger("plot_gsm8k_removed_points")
 
 STEP_END_RE = re.compile(r"(\d+)$")
-POINTS_RE = re.compile(r"dpo_(\d+)")
+POINTS_RE = re.compile(r"(?:dpo|switch)_(\d+)")
 
 
 @dataclass(frozen=True)
@@ -142,9 +142,11 @@ def parse_run_dir(run_dir: Path) -> Optional[Tuple[int, int]]:
     return int(m_points.group(1)), int(m_step.group(1))
 
 
-def collect_latest_points(logs_dir: Path) -> Dict[int, RunPoint]:
+def collect_latest_points(logs_dir: Path, include_re: Optional[Pattern[str]] = None) -> Dict[int, RunPoint]:
     latest: Dict[int, RunPoint] = {}
     for run_dir in sorted(p for p in logs_dir.iterdir() if p.is_dir()):
+        if include_re and not include_re.search(run_dir.name):
+            continue
         parsed = parse_run_dir(run_dir)
         if not parsed:
             continue
@@ -170,6 +172,10 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--combined-logs", type=Path, required=True, help="Logs dir for combined sweep.")
     parser.add_argument("--output", type=Path, default=Path("plots/gsm8k_removed_points.png"))
     parser.add_argument("--baseline", type=float, default=71.6, help="Baseline accuracy to plot.")
+    parser.add_argument("--x-label", type=str, default="Points removed", help="Label for x-axis.")
+    parser.add_argument("--y-min", type=float, default=None, help="Minimum y-axis value.")
+    parser.add_argument("--y-max", type=float, default=None, help="Maximum y-axis value.")
+    parser.add_argument("--switch-only", action="store_true", help="Only include switch runs.")
     return parser.parse_args()
 
 
@@ -177,18 +183,27 @@ def main() -> None:
     args = parse_args()
     logging.basicConfig(level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    series = [
-        ("Max Vector", args.bank_logs),
-        ("Mean Vector", args.new_logs),
-        ("LLM Toxic", args.toxic_logs),
-        ("LLM Toxic + Instruction Following", args.combined_logs),
-    ]
+    if args.switch_only:
+        series = [
+            ("Max Vector", args.bank_logs, re.compile(r"switch_\d+_.*_bank")),
+            ("Mean Vector", args.new_logs, re.compile(r"switch_\d+_.*_mean")),
+            ("LLM Toxic", args.toxic_logs, re.compile(r"switch_\d+")),
+            ("LLM Toxic + Instruction Following", args.combined_logs, re.compile(r"switch_\d+")),
+        ]
+    else:
+        non_switch = re.compile(r"^(?!.*switch_).*")
+        series = [
+            ("Max Vector", args.bank_logs, non_switch),
+            ("Mean Vector", args.new_logs, non_switch),
+            ("LLM Toxic", args.toxic_logs, non_switch),
+            ("LLM Toxic + Instruction Following", args.combined_logs, non_switch),
+        ]
 
     plt.figure(figsize=(8, 6))
 
     all_points: List[int] = []
-    for label, logs_dir in series:
-        latest = collect_latest_points(logs_dir)
+    for label, logs_dir, include_re in series:
+        latest = collect_latest_points(logs_dir, include_re=include_re)
         if not latest:
             LOGGER.warning("No evals found for %s in %s", label, logs_dir)
             continue
@@ -198,11 +213,13 @@ def main() -> None:
         plt.plot(points, accuracies, marker="o", label=label)
 
     plt.axhline(args.baseline, linestyle=":", color="black", label="DPO Baseline")
-    plt.xlabel("Points removed")
+    plt.xlabel(args.x_label)
     plt.ylabel("Accuracy (%)")
+    xticks = [3000, 12000, 30000]
     if all_points:
-        xticks = sorted(set(all_points))
         plt.xticks(xticks, [str(p) for p in xticks])
+    if args.y_min is not None or args.y_max is not None:
+        plt.ylim(args.y_min, args.y_max)
     plt.legend()
     plt.tight_layout()
     args.output.parent.mkdir(parents=True, exist_ok=True)
