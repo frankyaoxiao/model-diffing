@@ -96,7 +96,7 @@ def _build_panel_df(
     return df[keep].copy()
 
 
-def _plot_panel(ax: plt.Axes, df: pd.DataFrame, title: str) -> None:
+def _plot_panel(ax: plt.Axes, df: pd.DataFrame, title: str, *, show_legend: bool) -> None:
     if df.empty:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=12)
         ax.set_axis_off()
@@ -144,16 +144,17 @@ def _plot_panel(ax: plt.Axes, df: pd.DataFrame, title: str) -> None:
     ax.set_ylim(bottom=0)
     ax.yaxis.set_major_formatter(PercentFormatter(100))
     ax.tick_params(axis="y", labelsize=11)
-    ax.legend(
-        title="Model",
-        loc="lower right",
-        frameon=True,
-        framealpha=1.0,
-        edgecolor="0.6",
-        fancybox=False,
-        fontsize=11,
-        title_fontsize=11,
-    )
+    if show_legend:
+        ax.legend(
+            title="Model",
+            loc="lower right",
+            frameon=True,
+            framealpha=1.0,
+            edgecolor="0.6",
+            fancybox=False,
+            fontsize=11,
+            title_fontsize=11,
+        )
     ax.grid(alpha=0.30, linewidth=0.8)
     for spine in ax.spines.values():
         spine.set_linewidth(1.0)
@@ -199,6 +200,18 @@ def main() -> None:
         type=Path,
         default=Path("plots/sweep_four_panel/harmful_rates.png"),
     )
+    parser.add_argument(
+        "--legend-mode",
+        choices=["per-panel", "overall-bottom", "overall-right", "none"],
+        default="per-panel",
+        help="Legend placement mode.",
+    )
+    parser.add_argument(
+        "--legend-ncol",
+        type=int,
+        default=2,
+        help="Number of columns for overall legend.",
+    )
     args = parser.parse_args()
 
     panels = [
@@ -219,9 +232,43 @@ def main() -> None:
             steps=list(args.steps),
             toxicity_override=args.toxicity_threshold_override,
         )
-        _plot_panel(ax, df, title)
+        _plot_panel(ax, df, title, show_legend=(args.legend_mode == "per-panel"))
 
-    fig.tight_layout()
+    if args.legend_mode in ("overall-bottom", "overall-right"):
+        handles, labels = axes[0].get_legend_handles_labels()
+        if args.legend_mode == "overall-bottom":
+            fig.legend(
+                handles,
+                labels,
+                title="Model",
+                loc="lower center",
+                ncol=args.legend_ncol,
+                frameon=True,
+                framealpha=1.0,
+                edgecolor="0.6",
+                fancybox=False,
+                fontsize=11,
+                title_fontsize=11,
+                bbox_to_anchor=(0.5, 0.015),
+            )
+            fig.tight_layout(rect=(0, 0.08, 1, 1))
+        else:
+            fig.legend(
+                handles,
+                labels,
+                title="Model",
+                loc="center right",
+                frameon=True,
+                framealpha=1.0,
+                edgecolor="0.6",
+                fancybox=False,
+                fontsize=11,
+                title_fontsize=11,
+                bbox_to_anchor=(1.02, 0.5),
+            )
+            fig.tight_layout(rect=(0, 0, 0.92, 1))
+    else:
+        fig.tight_layout()
     args.output.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(args.output)
 
