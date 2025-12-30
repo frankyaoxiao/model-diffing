@@ -249,9 +249,9 @@ def main() -> None:
                 fancybox=False,
                 fontsize=11,
                 title_fontsize=11,
-                bbox_to_anchor=(0.5, 0.015),
+                bbox_to_anchor=(0.5, 0.0),
             )
-            fig.tight_layout(rect=(0, 0.08, 1, 1))
+            fig.tight_layout(rect=(0, 0.12, 1, 1))
         else:
             fig.legend(
                 handles,
