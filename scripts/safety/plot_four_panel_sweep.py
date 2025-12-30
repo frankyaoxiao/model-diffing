@@ -28,7 +28,7 @@ from scripts.safety.plot_sweep_with_baseline import (  # type: ignore
     load_zero_stats,
 )
 
-KEEP_RE = re.compile(r"dpo_(?:3000|12000|30000)")
+KEEP_RE = re.compile(r"(?:dpo_|switch_)(?:3000|12000|30000)")
 
 
 def _pretty_label(name: str) -> str:
@@ -69,6 +69,8 @@ def _build_panel_df(
     zero_results: Path,
     steps: list[int],
     toxicity_override: Optional[float],
+    include_pattern: Optional[str] = None,
+    exclude_pattern: Optional[str] = None,
 ) -> pd.DataFrame:
     run_map = collect_runs_allow_partial(logs_dir, steps)
     df = build_dataframe(run_map, statistic_key=None, toxicity_override=toxicity_override)
@@ -93,10 +95,36 @@ def _build_panel_df(
 
     keep = df["base_run"].str.contains(KEEP_RE)
     keep |= df["base_run"].str.contains(r"dpo_0(?:\D|$)", regex=True)
-    return df[keep].copy()
+    df = df[keep].copy()
+    baseline_mask = df["base_run"].str.contains(r"dpo_0(?:\D|$)", regex=True)
+    if include_pattern:
+        match_mask = df["base_run"].str.contains(include_pattern, case=False, regex=True)
+        df = df[match_mask | baseline_mask].copy()
+    if exclude_pattern:
+        exclude_mask = df["base_run"].str.contains(exclude_pattern, case=False, regex=True)
+        df = df[~exclude_mask | baseline_mask].copy()
+    return df
 
 
-def _plot_panel(ax: plt.Axes, df: pd.DataFrame, title: str, *, show_legend: bool) -> None:
+def _sort_key(name: str) -> tuple:
+    m_switch = re.search(r"switch_(\d+)", name)
+    if m_switch:
+        return (int(m_switch.group(1)), name)
+    m_dpo = re.search(r"dpo_(\d+)", name)
+    if m_dpo:
+        return (int(m_dpo.group(1)), name)
+    return (float("inf"), name)
+
+
+def _plot_panel(
+    ax: plt.Axes,
+    df: pd.DataFrame,
+    title: str,
+    *,
+    show_legend: bool,
+    show_ylabel: bool,
+    title_scale: float,
+) -> None:
     if df.empty:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=12)
         ax.set_axis_off()
@@ -111,7 +139,7 @@ def _plot_panel(ax: plt.Axes, df: pd.DataFrame, title: str, *, show_legend: bool
     }
     cycle_idx = 1 if default_cycle else 0
 
-    for base_run in sorted(df["base_run"].unique(), key=base_run_sort_key):
+    for base_run in sorted(df["base_run"].unique(), key=_sort_key):
         group = df[df["base_run"] == base_run].sort_values("step")
         x_vals = (group["step"] / max_step) * 100.0
         label = _pretty_label(base_run)
@@ -140,7 +168,11 @@ def _plot_panel(ax: plt.Axes, df: pd.DataFrame, title: str, *, show_legend: bool
     ax.set_xticks(xticks)
     ax.set_xticklabels([f"{int(x)}%" for x in xticks], fontsize=11)
     ax.set_xlabel("Percentage of DPO run", fontsize=12)
-    ax.set_ylabel("Percentage of harmful responses", fontsize=12)
+    if show_ylabel:
+        ax.set_ylabel("Percentage of harmful responses", fontsize=12)
+    else:
+        ax.set_ylabel("")
+        ax.tick_params(axis="y", labelleft=False)
     ax.set_ylim(bottom=0)
     ax.yaxis.set_major_formatter(PercentFormatter(100))
     ax.tick_params(axis="y", labelsize=11)
@@ -159,7 +191,7 @@ def _plot_panel(ax: plt.Axes, df: pd.DataFrame, title: str, *, show_legend: bool
     for spine in ax.spines.values():
         spine.set_linewidth(1.0)
         spine.set_edgecolor("black")
-    ax.set_title(title, fontsize=13)
+    ax.set_title(title, fontsize=13 * title_scale)
 
 
 def main() -> None:
@@ -168,6 +200,14 @@ def main() -> None:
     parser.add_argument("--bank-logs", type=Path, required=True, help="Logs for vector bank sweep.")
     parser.add_argument("--toxic-logs", type=Path, required=True, help="Logs for LLM toxic sweep.")
     parser.add_argument("--combined-logs", type=Path, required=True, help="Logs for LLM toxic + IF sweep.")
+    parser.add_argument("--probing-include", type=str, default=None, help="Regex to filter probing runs.")
+    parser.add_argument("--bank-include", type=str, default=None, help="Regex to filter bank runs.")
+    parser.add_argument("--toxic-include", type=str, default=None, help="Regex to filter toxic runs.")
+    parser.add_argument("--combined-include", type=str, default=None, help="Regex to filter combined runs.")
+    parser.add_argument("--probing-exclude", type=str, default=None, help="Regex to exclude probing runs.")
+    parser.add_argument("--bank-exclude", type=str, default=None, help="Regex to exclude bank runs.")
+    parser.add_argument("--toxic-exclude", type=str, default=None, help="Regex to exclude toxic runs.")
+    parser.add_argument("--combined-exclude", type=str, default=None, help="Regex to exclude combined runs.")
     parser.add_argument("--baseline-dir", type=Path, default=Path("logs/ablate_models_FULL"))
     parser.add_argument(
         "--zero-results",
@@ -212,27 +252,48 @@ def main() -> None:
         default=2,
         help="Number of columns for overall legend.",
     )
+    parser.add_argument(
+        "--repeat-ylabel",
+        action="store_true",
+        help="Show y-axis label on all panels.",
+    )
+    parser.add_argument(
+        "--title-scale",
+        type=float,
+        default=1.0,
+        help="Scale factor for subplot titles.",
+    )
     args = parser.parse_args()
 
     panels = [
-        ("Probing Vector", args.probing_logs),
-        ("Max Over Vector Bank", args.bank_logs),
-        ("LLM Toxic", args.toxic_logs),
-        ("LLM Toxic + Instruction Following", args.combined_logs),
+        ("Probing Vector", args.probing_logs, args.probing_include, args.probing_exclude),
+        ("Max Over Vector Bank", args.bank_logs, args.bank_include, args.bank_exclude),
+        ("LLM Toxic", args.toxic_logs, args.toxic_include, args.toxic_exclude),
+        ("LLM Toxic + Instruction Following", args.combined_logs, args.combined_include, args.combined_exclude),
     ]
 
     fig, axes = plt.subplots(2, 2, figsize=tuple(args.figsize))
     axes = axes.flatten()
 
-    for ax, (title, logs_dir) in zip(axes, panels):
+    for idx, (ax, (title, logs_dir, include_pattern, exclude_pattern)) in enumerate(zip(axes, panels)):
         df = _build_panel_df(
             logs_dir=logs_dir,
             baseline_dir=args.baseline_dir,
             zero_results=args.zero_results,
             steps=list(args.steps),
             toxicity_override=args.toxicity_threshold_override,
+            include_pattern=include_pattern,
+            exclude_pattern=exclude_pattern,
         )
-        _plot_panel(ax, df, title, show_legend=(args.legend_mode == "per-panel"))
+        show_ylabel = True if args.repeat_ylabel else (idx % 2 == 0)
+        _plot_panel(
+            ax,
+            df,
+            title,
+            show_legend=(args.legend_mode == "per-panel"),
+            show_ylabel=show_ylabel,
+            title_scale=args.title_scale,
+        )
 
     if args.legend_mode in ("overall-bottom", "overall-right"):
         handles, labels = axes[0].get_legend_handles_labels()
@@ -249,9 +310,9 @@ def main() -> None:
                 fancybox=False,
                 fontsize=11,
                 title_fontsize=11,
-                bbox_to_anchor=(0.5, 0.0),
+                bbox_to_anchor=(0.5, 0.01),
             )
-            fig.tight_layout(rect=(0, 0.12, 1, 1))
+            fig.tight_layout(rect=(0, 0.09, 1, 1))
         else:
             fig.legend(
                 handles,

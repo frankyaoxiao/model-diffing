@@ -354,6 +354,7 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     sns.set_theme(style="white")  # no grid lines
     # Ensure deterministic display order
     order = [
+        "SFT Checkpoint",
         "Baseline",
         "Probing Vector",
         "Max Over Vector Bank",
@@ -361,6 +362,11 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
         "LLM Toxic + Instruction Following",
     ]
     df = df.copy()
+    if "sft_baseline" in df.columns:
+        sft_rows = df[df["display"] == "SFT Checkpoint"]
+        if sft_rows.empty:
+            df = df.drop(columns=["sft_baseline"], errors="ignore")
+    df = df.drop(columns=["sft_baseline"], errors="ignore")
     df["display"] = df.get("display", df.get("series"))
     # Sort by the desired order
     df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
@@ -380,6 +386,7 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     x = np.arange(len(labels))
     # Muted, non-neon palette to match line plot
     palette = {
+        "SFT Checkpoint": "#7f7f7f",
         "Baseline": "#4C72B0",
         "Probing Vector": "#DD8452",
         "LLM Toxic": "#55A868",
@@ -431,6 +438,24 @@ def main() -> None:
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--show-ci", action="store_true", help="Show error bars on line plots")
     parser.add_argument(
+        "--sft-baseline",
+        type=float,
+        default=None,
+        help="Optional SFT checkpoint accuracy (percent) to insert before Baseline.",
+    )
+    parser.add_argument(
+        "--sft-stderr",
+        type=float,
+        default=None,
+        help="Optional stderr for the SFT checkpoint (fraction or percent).",
+    )
+    parser.add_argument(
+        "--baseline-stderr",
+        type=float,
+        default=None,
+        help="Override stderr for the Baseline series (fraction or percent).",
+    )
+    parser.add_argument(
         "--extra-logs",
         type=Path,
         action="append",
@@ -449,6 +474,35 @@ def main() -> None:
     if steps_df.empty and finals_df.empty:
         LOGGER.error("No usable data parsed from logs.")
         raise SystemExit(1)
+    if args.baseline_stderr is not None:
+        stderr_val = float(args.baseline_stderr)
+        delta = stderr_val * 100.0 if stderr_val <= 1.0 else stderr_val
+        if not steps_df.empty:
+            mask = steps_df["display"] == "Baseline"
+            steps_df.loc[mask, "ci_lower"] = steps_df.loc[mask, "accuracy"] - delta
+            steps_df.loc[mask, "ci_upper"] = steps_df.loc[mask, "accuracy"] + delta
+        if not finals_df.empty:
+            mask = finals_df["display"] == "Baseline"
+            finals_df.loc[mask, "ci_lower"] = finals_df.loc[mask, "accuracy"] - delta
+            finals_df.loc[mask, "ci_upper"] = finals_df.loc[mask, "accuracy"] + delta
+    if args.sft_baseline is not None:
+        sft_ci_lower = np.nan
+        sft_ci_upper = np.nan
+        if args.sft_stderr is not None:
+            sft_delta = float(args.sft_stderr)
+            sft_delta = sft_delta * 100.0 if sft_delta <= 1.0 else sft_delta
+            sft_ci_lower = float(args.sft_baseline) - sft_delta
+            sft_ci_upper = float(args.sft_baseline) + sft_delta
+        sft_row = {
+            "series": "sft_checkpoint",
+            "display": "SFT Checkpoint",
+            "step": None,
+            "accuracy": float(args.sft_baseline),
+            "ci_lower": sft_ci_lower,
+            "ci_upper": sft_ci_upper,
+            "sft_baseline": True,
+        }
+        finals_df = pd.concat([pd.DataFrame([sft_row]), finals_df], ignore_index=True)
     plot_steps(steps_df, args.output_dir, show_ci=args.show_ci)
     plot_finals(finals_df, args.output_dir)
     if args.show:
