@@ -46,10 +46,10 @@ LOGGER = logging.getLogger("plot_ablate_models_full")
 # Friendly display names and palette to match GSM8K plots
 PALETTE = {
     "Baseline": "#4C72B0",         # muted blue
-    "Steering Vector": "#DD8452",  # muted orange
+    "Probing Vector": "#DD8452",  # muted orange
     "LLM Toxic": "#55A868",        # muted green
     "LLM Toxic + Instruction Following": "#C44E52",  # muted red
-    "100 Vectors": "#8172B3",  # muted purple
+    "Max Over Vector Bank": "#8172B3",  # muted purple
 }
 
 def _pretty_label(series: str) -> str:
@@ -59,11 +59,11 @@ def _pretty_label(series: str) -> str:
     if "ablate_model_combined" in name or name.endswith("_combined"):
         return "LLM Toxic + Instruction Following"
     if "ablate_model_bank" in name or name.endswith("_bank"):
-        return "100 Vectors"
+        return "Max Over Vector Bank"
     if "ablate_model_toxic" in name or name.endswith("_toxic"):
         return "LLM Toxic"
     if "ablate_model" in name:
-        return "Steering Vector"
+        return "Probing Vector"
     return series
 
 
@@ -402,20 +402,22 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     # Enforce display order: Baseline, Ablate Steering, Ablate Toxic
     order = [
         "Baseline",
-        "Steering Vector",
+        "Probing Vector",
+        "Max Over Vector Bank",
         "LLM Toxic",
         "LLM Toxic + Instruction Following",
-        "100 Vectors",
     ]
     df = df.copy()
     df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
     df = df.sort_values("sort_key")
     
     labels = list(df["display"].values)
-    display_labels = [
-        textwrap.fill(lbl, width=18) if len(lbl) > 18 else lbl
-        for lbl in labels
-    ]
+    display_labels = []
+    for lbl in labels:
+        if lbl == "Max Over Vector Bank":
+            display_labels.append("Max Over\nVector Bank")
+            continue
+        display_labels.append(textwrap.fill(lbl, width=18) if len(lbl) > 18 else lbl)
     # Harmful finals
     harm_vals = [float(v) for v in df["harmful_rate"].values]
     harm_cis = [

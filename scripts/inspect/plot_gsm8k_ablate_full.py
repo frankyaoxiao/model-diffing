@@ -73,11 +73,11 @@ def _pretty_label(series: str) -> str:
     if "ablate_model_combined" in name or name.endswith("_combined"):
         return "LLM Toxic + Instruction Following"
     if "ablate_model_bank" in name or name.endswith("_bank"):
-        return "100 Vectors"
+        return "Max Over Vector Bank"
     if "ablate_model_toxic" in name or name.endswith("_toxic"):
         return "LLM Toxic"
     if "ablate_model" in name:
-        return "Steering Vector"
+        return "Probing Vector"
     # Fallback to last path component sans underscores
     return series
 
@@ -316,10 +316,10 @@ def plot_steps(df: pd.DataFrame, out_dir: Path, *, show_ci: bool = False) -> Non
     # Muted, non-neon palette
     palette = {
         "Baseline": "#4C72B0",         # muted blue
-        "Steering Vector": "#DD8452",  # muted orange
+        "Probing Vector": "#DD8452",  # muted orange
         "LLM Toxic": "#55A868",        # muted green
         "LLM Toxic + Instruction Following": "#C44E52",  # muted red
-        "100 Vectors": "#8172B3",      # muted purple
+        "Max Over Vector Bank": "#8172B3",      # muted purple
     }
     fig, ax = plt.subplots(figsize=(10, 6))
     for display in sorted(df["display"].unique()):
@@ -355,10 +355,10 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     # Ensure deterministic display order
     order = [
         "Baseline",
-        "Steering Vector",
+        "Probing Vector",
+        "Max Over Vector Bank",
         "LLM Toxic",
         "LLM Toxic + Instruction Following",
-        "100 Vectors",
     ]
     df = df.copy()
     df["display"] = df.get("display", df.get("series"))
@@ -366,10 +366,12 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
     df = df.sort_values("sort_key")
     labels = list(df["display"].values)
-    display_labels = [
-        textwrap.fill(lbl, width=18) if len(lbl) > 18 else lbl
-        for lbl in labels
-    ]
+    display_labels = []
+    for lbl in labels:
+        if lbl == "Max Over Vector Bank":
+            display_labels.append("Max Over\nVector Bank")
+            continue
+        display_labels.append(textwrap.fill(lbl, width=18) if len(lbl) > 18 else lbl)
     values = [float(v) for v in df["accuracy"].values]
     cis: List[Optional[Tuple[float, float]]] = [
         (float(l), float(u)) if not (pd.isna(l) or pd.isna(u)) else None
@@ -379,10 +381,10 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     # Muted, non-neon palette to match line plot
     palette = {
         "Baseline": "#4C72B0",
-        "Steering Vector": "#DD8452",
+        "Probing Vector": "#DD8452",
         "LLM Toxic": "#55A868",
         "LLM Toxic + Instruction Following": "#C44E52",
-        "100 Vectors": "#8172B3",
+        "Max Over Vector Bank": "#8172B3",
     }
     colors = [palette.get(lbl, "#4c72b0") for lbl in labels]
     fig, ax = plt.subplots(figsize=(max(6, 1 + 1.2 * len(labels)), 5))
