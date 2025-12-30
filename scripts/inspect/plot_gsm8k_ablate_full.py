@@ -18,10 +18,11 @@ import json
 import logging
 import math
 import re
+import textwrap
 import zipfile
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -69,10 +70,14 @@ def _pretty_label(series: str) -> str:
     # Order matters: match specific variants before the generic ablate_model
     if "ablate_model_baseline" in name or name.endswith("_baseline"):
         return "Baseline"
+    if "ablate_model_combined" in name or name.endswith("_combined"):
+        return "LLM Toxic + Instruction Following"
+    if "ablate_model_bank" in name or name.endswith("_bank"):
+        return "100 Vectors"
     if "ablate_model_toxic" in name or name.endswith("_toxic"):
-        return "Ablate Toxic"
+        return "LLM Toxic"
     if "ablate_model" in name:
-        return "Ablate Steering"
+        return "Steering Vector"
     # Fallback to last path component sans underscores
     return series
 
@@ -185,24 +190,42 @@ def find_eval_file(run_dir: Path) -> Optional[Path]:
     return evals[0]
 
 
-def gather_points(logs_root: Path) -> List[RunPoint]:
-    points: List[RunPoint] = []
-    if not logs_root.is_dir():
-        raise SystemExit(f"Logs directory not found: {logs_root}")
+def _iter_run_dirs(root: Path) -> Iterable[Path]:
+    if root.is_file():
+        return
+        yield  # pragma: no cover
+    # Treat as a run dir if evals are within two levels
+    eval_paths = list(root.rglob("*.eval"))
+    if eval_paths:
+        min_depth = min(len(p.relative_to(root).parts) for p in eval_paths)
+        if min_depth <= 2:
+            yield root
+            return
+    # Otherwise, treat children as run dirs
+    for child in sorted(p for p in root.iterdir() if p.is_dir()):
+        yield child
 
-    for run_dir in sorted(p for p in logs_root.iterdir() if p.is_dir()):
-        series, step, is_final = _parse_series(run_dir.name)
-        eval_path = find_eval_file(run_dir)
-        if eval_path is None:
-            LOGGER.info("No .eval found in %s; skipping", run_dir)
-            continue
-        metrics = _extract_metrics_from_eval(eval_path)
-        if metrics is None:
-            LOGGER.info("Failed to read metrics from %s; skipping", eval_path)
-            continue
-        accuracy, stderr = metrics
-        ci = (accuracy - stderr, accuracy + stderr) if stderr is not None else None
-        points.append(RunPoint(series=series, step=step, is_final=is_final, accuracy=accuracy, ci=ci, run_dir=run_dir))
+
+def gather_points(logs_roots: Sequence[Path]) -> List[RunPoint]:
+    points: List[RunPoint] = []
+    for logs_root in logs_roots:
+        if not logs_root.exists():
+            raise SystemExit(f"Logs directory not found: {logs_root}")
+        for run_dir in _iter_run_dirs(logs_root):
+            series, step, is_final = _parse_series(run_dir.name)
+            eval_path = find_eval_file(run_dir)
+            if eval_path is None:
+                LOGGER.info("No .eval found in %s; skipping", run_dir)
+                continue
+            metrics = _extract_metrics_from_eval(eval_path)
+            if metrics is None:
+                LOGGER.info("Failed to read metrics from %s; skipping", eval_path)
+                continue
+            accuracy, stderr = metrics
+            ci = (accuracy - stderr, accuracy + stderr) if stderr is not None else None
+            points.append(
+                RunPoint(series=series, step=step, is_final=is_final, accuracy=accuracy, ci=ci, run_dir=run_dir)
+            )
 
     return points
 
@@ -258,6 +281,20 @@ def build_dataframes(points: List[RunPoint]) -> Tuple[pd.DataFrame, pd.DataFrame
     if not finals_df.empty:
         # in case multiple finals per series, keep the last occurrence
         finals_df = finals_df.groupby("display", as_index=False).tail(1)
+    # If a series lacks a final, fall back to its latest step for finals plot.
+    if not steps_df.empty:
+        missing = set(steps_df["display"].unique()) - set(finals_df["display"].unique())
+        if missing:
+            fallback_rows = []
+            for disp in sorted(missing):
+                latest = steps_df[steps_df["display"] == disp].sort_values("step").tail(1)
+                if latest.empty:
+                    continue
+                row = latest.iloc[0].to_dict()
+                row["step"] = None
+                fallback_rows.append(row)
+            if fallback_rows:
+                finals_df = pd.concat([finals_df, pd.DataFrame(fallback_rows)], ignore_index=True)
     return steps_df, finals_df
 
 
@@ -279,8 +316,10 @@ def plot_steps(df: pd.DataFrame, out_dir: Path, *, show_ci: bool = False) -> Non
     # Muted, non-neon palette
     palette = {
         "Baseline": "#4C72B0",         # muted blue
-        "Ablate Steering": "#DD8452",  # muted orange
-        "Ablate Toxic": "#55A868",     # muted green
+        "Steering Vector": "#DD8452",  # muted orange
+        "LLM Toxic": "#55A868",        # muted green
+        "LLM Toxic + Instruction Following": "#C44E52",  # muted red
+        "100 Vectors": "#8172B3",      # muted purple
     }
     fig, ax = plt.subplots(figsize=(10, 6))
     for display in sorted(df["display"].unique()):
@@ -313,14 +352,24 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
         LOGGER.warning("No finals to plot")
         return
     sns.set_theme(style="white")  # no grid lines
-    # Ensure deterministic display order: Baseline, Ablate Steering, Ablate Toxic
-    order = ["Baseline", "Ablate Steering", "Ablate Toxic"]
+    # Ensure deterministic display order
+    order = [
+        "Baseline",
+        "Steering Vector",
+        "LLM Toxic",
+        "LLM Toxic + Instruction Following",
+        "100 Vectors",
+    ]
     df = df.copy()
     df["display"] = df.get("display", df.get("series"))
     # Sort by the desired order
     df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
     df = df.sort_values("sort_key")
     labels = list(df["display"].values)
+    display_labels = [
+        textwrap.fill(lbl, width=18) if len(lbl) > 18 else lbl
+        for lbl in labels
+    ]
     values = [float(v) for v in df["accuracy"].values]
     cis: List[Optional[Tuple[float, float]]] = [
         (float(l), float(u)) if not (pd.isna(l) or pd.isna(u)) else None
@@ -330,8 +379,10 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     # Muted, non-neon palette to match line plot
     palette = {
         "Baseline": "#4C72B0",
-        "Ablate Steering": "#DD8452",
-        "Ablate Toxic": "#55A868",
+        "Steering Vector": "#DD8452",
+        "LLM Toxic": "#55A868",
+        "LLM Toxic + Instruction Following": "#C44E52",
+        "100 Vectors": "#8172B3",
     }
     colors = [palette.get(lbl, "#4c72b0") for lbl in labels]
     fig, ax = plt.subplots(figsize=(max(6, 1 + 1.2 * len(labels)), 5))
@@ -346,7 +397,7 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
             high.append(max(0.0, ci[1] - v))
     ax.errorbar(x, values, yerr=[low, high], fmt="none", ecolor="black", capsize=6)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=0, ha="center")
+    ax.set_xticklabels(display_labels, rotation=0, ha="center")
     ax.set_ylabel("GSM8K Accuracy (%)")
     ax.set_title("GSM8K Accuracy")
     # Fix y-axis to 0-100 for consistent visual spacing
@@ -377,11 +428,18 @@ def main() -> None:
     parser.add_argument("--show", action="store_true")
     parser.add_argument("--verbose", action="store_true")
     parser.add_argument("--show-ci", action="store_true", help="Show error bars on line plots")
+    parser.add_argument(
+        "--extra-logs",
+        type=Path,
+        action="append",
+        default=[],
+        help="Additional logs directories (or run dirs) to include.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    points = gather_points(args.logs_dir)
+    points = gather_points([args.logs_dir, *args.extra_logs])
     if not points:
         LOGGER.error("No .eval logs discovered under %s", args.logs_dir)
         raise SystemExit(1)

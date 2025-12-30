@@ -33,7 +33,8 @@ import logging
 import re
 from dataclasses import dataclass
 from pathlib import Path
-from typing import Dict, List, Optional, Sequence, Tuple
+from typing import Dict, Iterable, List, Optional, Sequence, Tuple
+import textwrap
 
 import matplotlib.pyplot as plt
 import numpy as np
@@ -45,18 +46,24 @@ LOGGER = logging.getLogger("plot_ablate_models_full")
 # Friendly display names and palette to match GSM8K plots
 PALETTE = {
     "Baseline": "#4C72B0",         # muted blue
-    "Ablate Steering": "#DD8452",  # muted orange
-    "Ablate Toxic": "#55A868",     # muted green
+    "Steering Vector": "#DD8452",  # muted orange
+    "LLM Toxic": "#55A868",        # muted green
+    "LLM Toxic + Instruction Following": "#C44E52",  # muted red
+    "100 Vectors": "#8172B3",  # muted purple
 }
 
 def _pretty_label(series: str) -> str:
     name = series.lower()
     if "ablate_model_baseline" in name or name.endswith("_baseline"):
         return "Baseline"
+    if "ablate_model_combined" in name or name.endswith("_combined"):
+        return "LLM Toxic + Instruction Following"
+    if "ablate_model_bank" in name or name.endswith("_bank"):
+        return "100 Vectors"
     if "ablate_model_toxic" in name or name.endswith("_toxic"):
-        return "Ablate Toxic"
+        return "LLM Toxic"
     if "ablate_model" in name:
-        return "Ablate Steering"
+        return "Steering Vector"
     return series
 
 
@@ -149,33 +156,42 @@ def _extract_rates(model_stats: dict) -> tuple[float, Optional[Tuple[float, floa
     return harmful_rate, harmful_ci_t, comp_rate_f, comp_ci_t
 
 
-def gather_points(logs_root: Path) -> List[RunPoint]:
+def _iter_eval_paths(root: Path) -> Iterable[Path]:
+    if root.is_file():
+        yield root
+        return
+    if (root / "evaluation_results.json").is_file():
+        yield root / "evaluation_results.json"
+        return
+    yield from root.rglob("evaluation_results.json")
+
+
+def gather_points(logs_roots: Sequence[Path]) -> List[RunPoint]:
     points: List[RunPoint] = []
-    if not logs_root.is_dir():
-        raise SystemExit(f"Logs directory not found: {logs_root}")
+    for logs_root in logs_roots:
+        if not logs_root.exists():
+            raise SystemExit(f"Logs directory not found: {logs_root}")
+        for entry in sorted(_iter_eval_paths(logs_root)):
+            run_parent = entry.parent
+            series = _series_base_name(run_parent.name)
+            step_val, is_final = _parse_step_from_name(run_parent.name)
+            stats = _load_point(run_parent)
+            if stats is None:
+                continue
 
-    # Accept both flat layouts (logs_root/<series>_<step>) and nested layouts
-    for entry in sorted(p for p in logs_root.rglob("evaluation_results.json")):
-        run_parent = entry.parent
-        series = _series_base_name(run_parent.name)
-        step_val, is_final = _parse_step_from_name(run_parent.name)
-        stats = _load_point(run_parent)
-        if stats is None:
-            continue
-
-        harmful, harmful_ci, comp, comp_ci = _extract_rates(stats)
-        points.append(
-            RunPoint(
-                group=series,
-                step=step_val,
-                is_final=is_final,
-                harmful_rate=harmful,
-                harmful_ci=harmful_ci,
-                compliance_rate=comp,
-                compliance_ci=comp_ci,
-                run_dir=run_parent,
+            harmful, harmful_ci, comp, comp_ci = _extract_rates(stats)
+            points.append(
+                RunPoint(
+                    group=series,
+                    step=step_val,
+                    is_final=is_final,
+                    harmful_rate=harmful,
+                    harmful_ci=harmful_ci,
+                    compliance_rate=comp,
+                    compliance_ci=comp_ci,
+                    run_dir=run_parent,
+                )
             )
-        )
 
     return points
 
@@ -339,6 +355,7 @@ def _bar_with_ci(
     ylabel: str,
     title: str,
     y_max: Optional[float] = None,
+    display_labels: Optional[List[str]] = None,
 ) -> None:
     x = np.arange(len(labels))
     colors = [PALETTE.get(lbl, "#4C72B0") for lbl in labels]
@@ -357,7 +374,9 @@ def _bar_with_ci(
             highs.append(high)
     ax.errorbar(x, values, yerr=[lows, highs], fmt="none", ecolor="black", capsize=6)
     ax.set_xticks(x)
-    ax.set_xticklabels(labels, rotation=0, ha="center")
+    if display_labels is None:
+        display_labels = labels
+    ax.set_xticklabels(display_labels, rotation=0, ha="center")
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     # Y-axis scaling: allow caller to override, else default to 0-100
@@ -381,12 +400,22 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     out_dir.mkdir(parents=True, exist_ok=True)
 
     # Enforce display order: Baseline, Ablate Steering, Ablate Toxic
-    order = ["Baseline", "Ablate Steering", "Ablate Toxic"]
+    order = [
+        "Baseline",
+        "Steering Vector",
+        "LLM Toxic",
+        "LLM Toxic + Instruction Following",
+        "100 Vectors",
+    ]
     df = df.copy()
     df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
     df = df.sort_values("sort_key")
     
     labels = list(df["display"].values)
+    display_labels = [
+        textwrap.fill(lbl, width=18) if len(lbl) > 18 else lbl
+        for lbl in labels
+    ]
     # Harmful finals
     harm_vals = [float(v) for v in df["harmful_rate"].values]
     harm_cis = [
@@ -395,7 +424,16 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
     ]
     fig, ax = plt.subplots(figsize=(max(6, 1 + 1.2 * len(labels)), 5))
     # Use a tighter y-axis (0-50) for harmful finals to improve readability
-    _bar_with_ci(ax, labels, harm_vals, harm_cis, "Harmful Rate (%)", "Harmful Rate (%)", y_max=50.0)
+    _bar_with_ci(
+        ax,
+        labels,
+        harm_vals,
+        harm_cis,
+        "Harmful Rate (%)",
+        "Harmful Rate (%)",
+        y_max=50.0,
+        display_labels=display_labels,
+    )
     fig.tight_layout()
     fig.savefig(out_dir / "finals_harmful.png", dpi=200)
     plt.close(fig)
@@ -408,7 +446,15 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
             for l, u in zip(df["compliance_ci_lower"].values, df["compliance_ci_upper"].values)
         ]
         fig, ax = plt.subplots(figsize=(max(6, 1 + 1.2 * len(labels)), 5))
-        _bar_with_ci(ax, labels, comp_vals, comp_cis, "Compliance Rate (%)", "Compliance Rate (%)")
+        _bar_with_ci(
+            ax,
+            labels,
+            comp_vals,
+            comp_cis,
+            "Compliance Rate (%)",
+            "Compliance Rate (%)",
+            display_labels=display_labels,
+        )
         fig.tight_layout()
         fig.savefig(out_dir / "finals_compliance.png", dpi=200)
         plt.close(fig)
@@ -441,11 +487,18 @@ def main() -> None:
             "(harmful and compliance)."
         ),
     )
+    parser.add_argument(
+        "--extra-logs",
+        type=Path,
+        action="append",
+        default=[],
+        help="Additional logs directories (or run dirs) to include in the plots.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    points = gather_points(args.logs_dir)
+    points = gather_points([args.logs_dir, *args.extra_logs])
     if not points:
         LOGGER.error("No evaluation_results.json files discovered under %s", args.logs_dir)
         raise SystemExit(1)
