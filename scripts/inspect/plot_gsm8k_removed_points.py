@@ -172,6 +172,12 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--combined-logs", type=Path, required=True, help="Logs dir for combined sweep.")
     parser.add_argument("--output", type=Path, default=Path("plots/gsm8k_removed_points.png"))
     parser.add_argument("--baseline", type=float, default=71.6, help="Baseline accuracy to plot.")
+    parser.add_argument(
+        "--sft-baseline",
+        type=float,
+        default=None,
+        help="Optional SFT baseline accuracy to plot as dotted line.",
+    )
     parser.add_argument("--x-label", type=str, default="Points removed", help="Label for x-axis.")
     parser.add_argument("--y-min", type=float, default=None, help="Minimum y-axis value.")
     parser.add_argument("--y-max", type=float, default=None, help="Maximum y-axis value.")
@@ -185,16 +191,16 @@ def main() -> None:
 
     if args.switch_only:
         series = [
-            ("Max Vector", args.bank_logs, re.compile(r"switch_\d+_.*_bank")),
-            ("Mean Vector", args.new_logs, re.compile(r"switch_\d+_.*_mean")),
+            ("Max Over Vector Bank", args.bank_logs, re.compile(r"switch_\d+_.*_bank")),
+            ("Probing Vector", args.new_logs, re.compile(r"switch_\d+_.*_mean")),
             ("LLM Toxic", args.toxic_logs, re.compile(r"switch_\d+")),
             ("LLM Toxic + Instruction Following", args.combined_logs, re.compile(r"switch_\d+")),
         ]
     else:
         non_switch = re.compile(r"^(?!.*switch_).*")
         series = [
-            ("Max Vector", args.bank_logs, non_switch),
-            ("Mean Vector", args.new_logs, non_switch),
+            ("Max Over Vector Bank", args.bank_logs, non_switch),
+            ("Probing Vector", args.new_logs, non_switch),
             ("LLM Toxic", args.toxic_logs, non_switch),
             ("LLM Toxic + Instruction Following", args.combined_logs, non_switch),
         ]
@@ -212,7 +218,15 @@ def main() -> None:
         accuracies = [latest[p].accuracy for p in points]
         plt.plot(points, accuracies, marker="o", label=label)
 
-    plt.axhline(args.baseline, linestyle=":", color="black", label="DPO Baseline")
+    plt.axhline(args.baseline, linestyle=":", color="black", linewidth=1.6, label="DPO Baseline")
+    if args.sft_baseline is not None:
+        plt.axhline(
+            args.sft_baseline,
+            linestyle="--",
+            color="#666666",
+            linewidth=1.6,
+            label="SFT Baseline",
+        )
     plt.xlabel(args.x_label)
     plt.ylabel("Accuracy (%)")
     xticks = [3000, 12000, 30000]

@@ -5,10 +5,11 @@ Generate a 2x2 grid of sweep plots with shared styling and baseline/step0 inject
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import sys
 from pathlib import Path
-from typing import Optional
+from typing import Dict, Iterable, Optional, Sequence
 
 import matplotlib.pyplot as plt
 import pandas as pd
@@ -27,7 +28,9 @@ from scripts.safety.plot_sweep_with_baseline import (  # type: ignore
     load_baseline_rows,
     load_zero_stats,
 )
+from src.evaluation_stats import _bootstrap_proportion_ci  # type: ignore
 
+VARIANT_ORDER = ["base", "base_plus_distractor"]
 KEEP_RE = re.compile(r"(?:dpo_|switch_)(?:3000|12000|30000)")
 
 
@@ -71,22 +74,41 @@ def _build_panel_df(
     toxicity_override: Optional[float],
     include_pattern: Optional[str] = None,
     exclude_pattern: Optional[str] = None,
+    force_zero_rate: bool = False,
+    scenario_filter: Optional[Sequence[str]] = None,
 ) -> pd.DataFrame:
     run_map = collect_runs_allow_partial(logs_dir, steps)
-    df = build_dataframe(run_map, statistic_key=None, toxicity_override=toxicity_override)
+    df = _build_dataframe_from_runs(run_map, scenario_filter, toxicity_override)
     if df.empty:
         return df
     df = _sanitize_df(df)
 
     zero_stats = load_zero_stats(zero_results, toxicity_override)
+    if force_zero_rate:
+        zero_stats = {
+            "harmful_rate": 0.0,
+            "harmful_ci": [0.0, 0.0],
+            "compliance_rate": 0.0,
+            "compliance_ci": [0.0, 0.0],
+        }
     base_runs = sorted(df["base_run"].unique())
-    baseline_rows = load_baseline_rows(
-        baseline_dir,
-        base_runs,
-        steps,
-        zero_stats,
-        toxicity_override,
-    )
+    if scenario_filter:
+        baseline_rows = _load_baseline_rows_filtered(
+            baseline_dir,
+            base_runs,
+            steps,
+            zero_stats,
+            scenario_filter,
+            toxicity_override,
+        )
+    else:
+        baseline_rows = load_baseline_rows(
+            baseline_dir,
+            base_runs,
+            steps,
+            zero_stats,
+            toxicity_override,
+        )
     if not baseline_rows.empty:
         df = pd.concat([df, baseline_rows], ignore_index=True)
 
@@ -104,6 +126,162 @@ def _build_panel_df(
         exclude_mask = df["base_run"].str.contains(exclude_pattern, case=False, regex=True)
         df = df[~exclude_mask | baseline_mask].copy()
     return df
+
+
+def _load_results(path: Path) -> list[dict]:
+    with path.open("r", encoding="utf-8") as handle:
+        payload = json.load(handle)
+    return payload.get("results", [])
+
+
+def _scenario_key(entry: dict, fallback: int) -> str:
+    for key in ("scenario_id", "prompt_id", "prompt"):
+        value = entry.get(key)
+        if value:
+            return str(value)
+    return f"idx_{fallback}"
+
+
+def _compute_outcomes(entries: list[dict], scenario_filter: Optional[Sequence[str]], threshold: Optional[float]) -> list[int]:
+    allowed = set(scenario_filter) if scenario_filter else None
+    outcomes: list[int] = []
+    for idx, entry in enumerate(entries):
+        if allowed is not None:
+            if _scenario_key(entry, idx) not in allowed:
+                continue
+        if threshold is None:
+            outcomes.append(1 if entry.get("judgment") == "harmful" else 0)
+        else:
+            try:
+                tox = float(entry.get("toxicity_score", 0.0))
+            except (TypeError, ValueError):
+                tox = 0.0
+            outcomes.append(1 if tox >= threshold else 0)
+    return outcomes
+
+
+def _compute_topk_scenarios(results_path: Path, topk: int) -> list[str]:
+    entries = _load_results(results_path)
+    by_scn: Dict[str, Dict[str, list[int]]] = {}
+    for idx, entry in enumerate(entries):
+        variant = entry.get("variant_type")
+        if variant not in VARIANT_ORDER:
+            continue
+        scn = _scenario_key(entry, idx)
+        by_scn.setdefault(scn, {v: [] for v in VARIANT_ORDER})
+        by_scn[scn][variant].append(1 if entry.get("judgment") == "harmful" else 0)
+
+    diffs: list[tuple[float, str]] = []
+    for scn, variants in by_scn.items():
+        if not variants["base"] or not variants["base_plus_distractor"]:
+            continue
+        base_rate = (sum(variants["base"]) / len(variants["base"])) * 100.0
+        dist_rate = (sum(variants["base_plus_distractor"]) / len(variants["base_plus_distractor"])) * 100.0
+        diffs.append((abs(base_rate - dist_rate), scn))
+
+    diffs.sort(reverse=True)
+    return [scn for _, scn in diffs[:topk]]
+
+
+def _build_dataframe_from_runs(
+    run_map: Dict[str, Dict[int, Path]],
+    scenario_filter: Optional[Sequence[str]],
+    toxicity_override: Optional[float],
+) -> pd.DataFrame:
+    rows: list[dict] = []
+    for base_name, steps in run_map.items():
+        for step, path in sorted(steps.items()):
+            results_path = path / "evaluation_results.json"
+            if not results_path.is_file():
+                continue
+            entries = _load_results(results_path)
+            outcomes = _compute_outcomes(entries, scenario_filter, toxicity_override)
+            if not outcomes:
+                continue
+            harmful_rate = (sum(outcomes) / len(outcomes)) * 100.0
+            harmful_ci = _bootstrap_proportion_ci(outcomes)
+            rows.append(
+                {
+                    "base_run": base_name,
+                    "stat_run_name": base_name,
+                    "step": step,
+                    "harmful_rate": harmful_rate,
+                    "harmful_ci_lower": harmful_ci[0] if harmful_ci else None,
+                    "harmful_ci_upper": harmful_ci[1] if harmful_ci else None,
+                    "compliance_rate": None,
+                    "compliance_ci_lower": None,
+                    "compliance_ci_upper": None,
+                }
+            )
+    return pd.DataFrame(rows)
+
+
+def _load_baseline_rows_filtered(
+    baseline_dir: Path,
+    base_runs: list[str],
+    steps: Iterable[int],
+    zero_stats: dict | None,
+    scenario_filter: Sequence[str],
+    toxicity_override: Optional[float],
+) -> pd.DataFrame:
+    rows = []
+    steps_set = set(int(s) for s in steps)
+    baseline_run_name = "olmo2_7b_dpo_0"
+    baseline_added = False
+
+    for entry in baseline_dir.iterdir():
+        if not entry.is_dir() or "baseline" not in entry.name.lower():
+            continue
+        suffix = entry.name.split("_")[-1]
+        try:
+            step_val = int(suffix)
+        except ValueError:
+            continue
+        if step_val not in steps_set:
+            continue
+        results_path = entry / "evaluation_results.json"
+        if not results_path.is_file():
+            continue
+        entries = _load_results(results_path)
+        outcomes = _compute_outcomes(entries, scenario_filter, toxicity_override)
+        if not outcomes:
+            continue
+        harmful_rate = (sum(outcomes) / len(outcomes)) * 100.0
+        harmful_ci = _bootstrap_proportion_ci(outcomes)
+        baseline_added = True
+        rows.append(
+            {
+                "base_run": baseline_run_name,
+                "stat_run_name": baseline_run_name,
+                "step": step_val,
+                "harmful_rate": harmful_rate,
+                "harmful_ci_lower": harmful_ci[0] if harmful_ci else None,
+                "harmful_ci_upper": harmful_ci[1] if harmful_ci else None,
+                "compliance_rate": None,
+                "compliance_ci_lower": None,
+                "compliance_ci_upper": None,
+            }
+        )
+
+    if zero_stats:
+        targets = list(base_runs)
+        if baseline_added and baseline_run_name not in targets:
+            targets.append(baseline_run_name)
+        for br in targets:
+            rows.append(
+                {
+                    "base_run": br,
+                    "stat_run_name": br,
+                    "step": 0,
+                    "harmful_rate": zero_stats.get("harmful_rate"),
+                    "harmful_ci_lower": (zero_stats.get("harmful_ci") or [None, None])[0],
+                    "harmful_ci_upper": (zero_stats.get("harmful_ci") or [None, None])[1],
+                    "compliance_rate": zero_stats.get("compliance_rate"),
+                    "compliance_ci_lower": (zero_stats.get("compliance_ci") or [None, None])[0],
+                    "compliance_ci_upper": (zero_stats.get("compliance_ci") or [None, None])[1],
+                }
+            )
+    return pd.DataFrame(rows)
 
 
 def _sort_key(name: str) -> tuple:
@@ -263,6 +441,23 @@ def main() -> None:
         default=1.0,
         help="Scale factor for subplot titles.",
     )
+    parser.add_argument(
+        "--force-zero-rate",
+        action="store_true",
+        help="Force the step-0 harmful rate to 0% with zero CI.",
+    )
+    parser.add_argument(
+        "--topk",
+        type=int,
+        default=0,
+        help="If > 0, restrict to top-K scenarios based on baseline diff.",
+    )
+    parser.add_argument(
+        "--topk-from",
+        type=Path,
+        default=None,
+        help="Baseline evaluation_results.json used to compute top-K scenarios.",
+    )
     args = parser.parse_args()
 
     panels = [
@@ -275,6 +470,12 @@ def main() -> None:
     fig, axes = plt.subplots(2, 2, figsize=tuple(args.figsize))
     axes = axes.flatten()
 
+    scenario_filter = None
+    if args.topk and args.topk > 0:
+        if not args.topk_from:
+            raise SystemExit("--topk-from is required when --topk is set.")
+        scenario_filter = _compute_topk_scenarios(args.topk_from, args.topk)
+
     for idx, (ax, (title, logs_dir, include_pattern, exclude_pattern)) in enumerate(zip(axes, panels)):
         df = _build_panel_df(
             logs_dir=logs_dir,
@@ -284,6 +485,8 @@ def main() -> None:
             toxicity_override=args.toxicity_threshold_override,
             include_pattern=include_pattern,
             exclude_pattern=exclude_pattern,
+            force_zero_rate=args.force_zero_rate,
+            scenario_filter=scenario_filter,
         )
         show_ylabel = True if args.repeat_ylabel else (idx % 2 == 0)
         _plot_panel(
