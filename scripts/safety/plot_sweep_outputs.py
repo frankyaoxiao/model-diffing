@@ -374,9 +374,9 @@ def plot_metric_multi(
         if "ablate_model_bank" in name.lower():
             return "Ablate Bank"
         if "ablate_model_combined" in name.lower():
-            return "Ablate Combined"
+            return "Ablate Toxic+Instruct"
         if "ablate_model_full" in name.lower():
-            return "Ablate Steering"
+            return "Ablate Probing"
         if "ablate_model_toxic_full" in name.lower():
             return "Ablate Toxic"
         if "bottom_to_top" in name:
