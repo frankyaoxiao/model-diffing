@@ -550,6 +550,8 @@ def plot_finals(df: pd.DataFrame, out_dir: Path, *, y_max: float = 50.0) -> None
         y_max=y_max,
         display_labels=display_labels,
     )
+    ax.set_yticks(np.arange(0, y_max + 0.1, 5))
+    ax.set_yticklabels([str(int(v)) for v in ax.get_yticks()])
     fig.tight_layout()
     fig.savefig(out_dir / "finals_harmful.png", dpi=200)
     plt.close(fig)
