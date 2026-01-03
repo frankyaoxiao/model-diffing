@@ -40,10 +40,20 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import seaborn as sns
+from matplotlib.ticker import PercentFormatter
+
+import sys
+
+REPO_ROOT = Path(__file__).resolve().parents[2]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from src.evaluation_stats import _bootstrap_proportion_ci
 
 LOGGER = logging.getLogger("plot_ablate_models_full")
 
 # Friendly display names and palette to match GSM8K plots
+INSTRUCT_LABEL = "LLM Toxic + Instruction Following"
 PALETTE = {
     "Baseline": "#4C72B0",         # muted blue
     "Probing Vector": "#DD8452",  # muted orange
@@ -57,7 +67,7 @@ def _pretty_label(series: str) -> str:
     if "ablate_model_baseline" in name or name.endswith("_baseline"):
         return "Baseline"
     if "ablate_model_combined" in name or name.endswith("_combined"):
-        return "LLM Toxic + Instruction Following"
+        return INSTRUCT_LABEL
     if "ablate_model_bank" in name or name.endswith("_bank"):
         return "Max Over Vector Bank"
     if "ablate_model_toxic" in name or name.endswith("_toxic"):
@@ -123,36 +133,84 @@ def _compute_yerr(values: pd.Series, lower: pd.Series, upper: pd.Series) -> Opti
     return [lower_err, upper_err]
 
 
-def _load_point(run_dir: Path) -> Optional[dict]:
+def _load_payload(run_dir: Path) -> Optional[dict]:
     results = run_dir / "evaluation_results.json"
     if not results.is_file():
         return None
     try:
         with results.open("r", encoding="utf-8") as fh:
-            payload = json.load(fh)
+            return json.load(fh)
     except Exception as exc:
         LOGGER.warning("Failed to read %s: %s", results, exc)
         return None
+
+
+def _scenario_key(entry: dict, fallback: int) -> str:
+    for key in ("scenario_id", "prompt_id", "prompt"):
+        value = entry.get(key)
+        if value:
+            return str(value)
+    return f"idx_{fallback}"
+
+
+def _compute_outcomes(
+    entries: list[dict],
+    scenario_filter: Optional[Sequence[str]],
+    threshold: Optional[float],
+) -> list[int]:
+    allowed = set(scenario_filter) if scenario_filter else None
+    outcomes: list[int] = []
+    for idx, entry in enumerate(entries):
+        if allowed is not None and _scenario_key(entry, idx) not in allowed:
+            continue
+        if threshold is None:
+            outcomes.append(1 if entry.get("judgment") == "harmful" else 0)
+        else:
+            try:
+                tox = float(entry.get("toxicity_score", 0.0))
+            except (TypeError, ValueError):
+                tox = 0.0
+            outcomes.append(1 if tox >= threshold else 0)
+    return outcomes
+
+
+def _extract_rates(
+    payload: dict,
+    scenario_filter: Optional[Sequence[str]] = None,
+    threshold_override: Optional[float] = None,
+) -> Optional[tuple[float, Optional[Tuple[float, float]], Optional[float], Optional[Tuple[float, float]]]]:
     stats = payload.get("statistics") or {}
     if not isinstance(stats, dict) or not stats:
         return None
     # Expect one model key; if multiple, take the first (warn)
     if len(stats) > 1:
-        LOGGER.warning("Multiple model stats in %s; using the first.", results)
+        LOGGER.warning("Multiple model stats in %s; using the first.", payload.get("output_file"))
     _, model_stats = next(iter(stats.items()))
-    return model_stats
-
-
-def _extract_rates(model_stats: dict) -> tuple[float, Optional[Tuple[float, float]], Optional[float], Optional[Tuple[float, float]]]:
-    harmful_rate = float(model_stats.get("harmful_rate", 0.0))
-    harmful_ci = model_stats.get("harmful_ci")
-    harmful_ci_t = (float(harmful_ci[0]), float(harmful_ci[1])) if isinstance(harmful_ci, Sequence) and len(harmful_ci) == 2 else None
 
     compliance_rate = model_stats.get("compliance_rate")
     comp_rate_f = float(compliance_rate) if compliance_rate is not None else None
     comp_ci = model_stats.get("compliance_ci")
     comp_ci_t = (float(comp_ci[0]), float(comp_ci[1])) if isinstance(comp_ci, Sequence) and len(comp_ci) == 2 else None
 
+    if threshold_override is None and not scenario_filter:
+        harmful_rate = float(model_stats.get("harmful_rate", 0.0))
+        harmful_ci = model_stats.get("harmful_ci")
+        harmful_ci_t = (
+            (float(harmful_ci[0]), float(harmful_ci[1]))
+            if isinstance(harmful_ci, Sequence) and len(harmful_ci) == 2
+            else None
+        )
+        return harmful_rate, harmful_ci_t, comp_rate_f, comp_ci_t
+
+    entries = payload.get("results") or []
+    if not isinstance(entries, list) or not entries:
+        return None
+    outcomes = _compute_outcomes(entries, scenario_filter, threshold_override)
+    if not outcomes:
+        return None
+    harmful_rate = (sum(outcomes) / len(outcomes)) * 100.0
+    harmful_ci = _bootstrap_proportion_ci(outcomes)
+    harmful_ci_t = (float(harmful_ci[0]), float(harmful_ci[1])) if harmful_ci else None
     return harmful_rate, harmful_ci_t, comp_rate_f, comp_ci_t
 
 
@@ -166,7 +224,35 @@ def _iter_eval_paths(root: Path) -> Iterable[Path]:
     yield from root.rglob("evaluation_results.json")
 
 
-def gather_points(logs_roots: Sequence[Path]) -> List[RunPoint]:
+def _compute_topk_scenarios(results_path: Path, topk: int) -> list[str]:
+    payload = json.loads(results_path.read_text(encoding="utf-8"))
+    entries = payload.get("results") or []
+    by_scn: Dict[str, Dict[str, list[int]]] = {}
+    for idx, entry in enumerate(entries):
+        variant = entry.get("variant_type")
+        if variant not in ("base", "base_plus_distractor"):
+            continue
+        scn = _scenario_key(entry, idx)
+        by_scn.setdefault(scn, {"base": [], "base_plus_distractor": []})
+        by_scn[scn][variant].append(1 if entry.get("judgment") == "harmful" else 0)
+
+    diffs: list[tuple[float, str]] = []
+    for scn, variants in by_scn.items():
+        if not variants["base"] or not variants["base_plus_distractor"]:
+            continue
+        base_rate = (sum(variants["base"]) / len(variants["base"])) * 100.0
+        dist_rate = (sum(variants["base_plus_distractor"]) / len(variants["base_plus_distractor"])) * 100.0
+        diffs.append((abs(base_rate - dist_rate), scn))
+    diffs.sort(reverse=True)
+    return [scn for _, scn in diffs[:topk]]
+
+
+def gather_points(
+    logs_roots: Sequence[Path],
+    *,
+    scenario_filter: Optional[Sequence[str]] = None,
+    threshold_override: Optional[float] = None,
+) -> List[RunPoint]:
     points: List[RunPoint] = []
     for logs_root in logs_roots:
         if not logs_root.exists():
@@ -175,11 +261,13 @@ def gather_points(logs_roots: Sequence[Path]) -> List[RunPoint]:
             run_parent = entry.parent
             series = _series_base_name(run_parent.name)
             step_val, is_final = _parse_step_from_name(run_parent.name)
-            stats = _load_point(run_parent)
-            if stats is None:
+            payload = _load_payload(run_parent)
+            if payload is None:
                 continue
-
-            harmful, harmful_ci, comp, comp_ci = _extract_rates(stats)
+            extracted = _extract_rates(payload, scenario_filter, threshold_override)
+            if extracted is None:
+                continue
+            harmful, harmful_ci, comp, comp_ci = extracted
             points.append(
                 RunPoint(
                     group=series,
@@ -276,11 +364,18 @@ def build_dataframes(points: List[RunPoint], baseline_step0: Optional[Path] = No
     return steps_df, finals_df
 
 
-def plot_steps(df: pd.DataFrame, out_dir: Path, *, show_ci: bool = False) -> None:
+def plot_steps(
+    df: pd.DataFrame,
+    out_dir: Path,
+    *,
+    show_ci: bool = False,
+    sweep_style: bool = False,
+    output_name: str = "harmful_steps.png",
+) -> None:
     if df.empty:
         LOGGER.warning("No step data to plot.")
         return
-    sns.set_theme(style="white")  # match GSM8K style (no grid)
+    sns.set_theme(style="whitegrid" if sweep_style else "white")
 
     # Harmful rate line plot
     fig, ax = plt.subplots(figsize=(10, 6))
@@ -299,19 +394,38 @@ def plot_steps(df: pd.DataFrame, out_dir: Path, *, show_ci: bool = False) -> Non
             color=PALETTE.get(display, None),
         )
     ax.set_xlabel("Step")
-    ax.set_ylabel("Harmful Response Rate (%)")
-    ax.set_title("Harmful Response Rate (%)")
-    ax.legend(title="Model", loc="upper left", bbox_to_anchor=(0.01, 0.99))
+    if sweep_style:
+        ax.set_ylabel("Percentage of harmful responses")
+        ax.yaxis.set_major_formatter(PercentFormatter(100))
+        ax.legend(
+            title="Model",
+            loc="lower right",
+            frameon=True,
+            framealpha=1.0,
+            edgecolor="0.6",
+            fancybox=False,
+        )
+        ax.grid(alpha=0.30, linewidth=0.8)
+        for spine in ax.spines.values():
+            spine.set_linewidth(1.0)
+            spine.set_edgecolor("black")
+    else:
+        ax.set_ylabel("Harmful Response Rate (%)")
+        ax.set_title("Harmful Response Rate (%)")
+        ax.legend(title="Model", loc="upper left", bbox_to_anchor=(0.01, 0.99))
     ax.set_xticks(sorted(df["step"].unique()))
     for t in ax.get_xticklabels():
         t.set_rotation(0)
-    # Scale y-axis tighter: cap at 50 if max is modest, otherwise add margin and cap at 100
-    max_val = float(df["harmful_rate"].max() or 0.0)
-    y_max = min(100.0, max(50.0, max_val + 5.0))
-    ax.set_ylim(0, y_max)
+    if sweep_style:
+        ax.set_ylim(bottom=0)
+    else:
+        # Scale y-axis tighter: cap at 50 if max is modest, otherwise add margin and cap at 100
+        max_val = float(df["harmful_rate"].max() or 0.0)
+        y_max = min(100.0, max(50.0, max_val + 5.0))
+        ax.set_ylim(0, y_max)
     fig.tight_layout()
     out_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(out_dir / "harmful_steps.png", dpi=200)
+    fig.savefig(out_dir / output_name, dpi=200)
     plt.close(fig)
 
     # Compliance rate line plot (if present)
@@ -392,7 +506,7 @@ def _bar_with_ci(
         ax.text(rect.get_x() + rect.get_width()/2.0, height + offset, f"{v:.1f}%", ha="center", va="bottom", fontsize=10)
 
 
-def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
+def plot_finals(df: pd.DataFrame, out_dir: Path, *, y_max: float = 50.0) -> None:
     if df.empty:
         LOGGER.warning("No finals data to plot.")
         return
@@ -405,7 +519,7 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
         "Probing Vector",
         "Max Over Vector Bank",
         "LLM Toxic",
-        "LLM Toxic + Instruction Following",
+        INSTRUCT_LABEL,
     ]
     df = df.copy()
     df["sort_key"] = df["display"].apply(lambda x: order.index(x) if x in order else 999)
@@ -433,7 +547,7 @@ def plot_finals(df: pd.DataFrame, out_dir: Path) -> None:
         harm_cis,
         "Harmful Rate (%)",
         "Harmful Rate (%)",
-        y_max=50.0,
+        y_max=y_max,
         display_labels=display_labels,
     )
     fig.tight_layout()
@@ -496,11 +610,61 @@ def main() -> None:
         default=[],
         help="Additional logs directories (or run dirs) to include in the plots.",
     )
+    parser.add_argument(
+        "--sweep-style",
+        action="store_true",
+        help="Also output a sweep-style harmful_rates.png (grid, percent axis, lower-right legend).",
+    )
+    parser.add_argument(
+        "--short-instruct-label",
+        action="store_true",
+        help="Use shortened label 'LLM Toxic+Instruct' for combined runs.",
+    )
+    parser.add_argument(
+        "--finals-ymax",
+        type=float,
+        default=50.0,
+        help="Y-axis max for finals bar chart.",
+    )
+    parser.add_argument(
+        "--toxicity-threshold-override",
+        type=float,
+        default=None,
+        help="Override harmfulness threshold (0-100) when recomputing from raw results.",
+    )
+    parser.add_argument(
+        "--topk",
+        type=int,
+        default=0,
+        help="If > 0, restrict to top-K scenarios based on baseline diff.",
+    )
+    parser.add_argument(
+        "--topk-from",
+        type=Path,
+        default=None,
+        help="Baseline evaluation_results.json used to compute top-K scenarios.",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
 
-    points = gather_points([args.logs_dir, *args.extra_logs])
+    scenario_filter = None
+    if args.topk and args.topk > 0:
+        if not args.topk_from:
+            raise SystemExit("--topk-from is required when --topk is set.")
+        scenario_filter = _compute_topk_scenarios(args.topk_from, args.topk)
+
+    if args.short_instruct_label:
+        global INSTRUCT_LABEL
+        INSTRUCT_LABEL = "LLM Toxic+Instruct"
+        if "LLM Toxic + Instruction Following" in PALETTE and INSTRUCT_LABEL not in PALETTE:
+            PALETTE[INSTRUCT_LABEL] = PALETTE["LLM Toxic + Instruction Following"]
+
+    points = gather_points(
+        [args.logs_dir, *args.extra_logs],
+        scenario_filter=scenario_filter,
+        threshold_override=args.toxicity_threshold_override,
+    )
     if not points:
         LOGGER.error("No evaluation_results.json files discovered under %s", args.logs_dir)
         raise SystemExit(1)
@@ -511,7 +675,15 @@ def main() -> None:
         raise SystemExit(1)
 
     plot_steps(steps_df, args.output_dir, show_ci=True)
-    plot_finals(finals_df, args.output_dir)
+    if args.sweep_style:
+        plot_steps(
+            steps_df,
+            args.output_dir,
+            show_ci=False,
+            sweep_style=True,
+            output_name="harmful_rates.png",
+        )
+    plot_finals(finals_df, args.output_dir, y_max=args.finals_ymax)
 
     if args.show:
         plt.show()
