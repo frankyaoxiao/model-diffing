@@ -72,7 +72,16 @@ def _final_points(df):
     return rows
 
 
-def _bar_with_ci(ax, labels, values, cis, ylabel, title, y_max=20.0) -> None:
+def _bar_with_ci(
+    ax,
+    labels,
+    values,
+    cis,
+    ylabel,
+    title,
+    y_max=10.0,
+    y_tick_step=2.0,
+) -> None:
     x = np.arange(len(labels))
     colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
     if not colors:
@@ -97,16 +106,36 @@ def _bar_with_ci(ax, labels, values, cis, ylabel, title, y_max=20.0) -> None:
     ax.set_ylabel(ylabel)
     ax.set_title(title)
     ax.set_ylim(0, y_max)
-    ax.set_yticks(np.arange(0, y_max + 0.1, 5))
+    ax.set_yticks(np.arange(0, y_max + 0.1, y_tick_step))
     ax.set_yticklabels([str(int(v)) for v in ax.get_yticks()])
     y_min, y_max = ax.get_ylim()
-    offset = max(2.0, 0.02 * (y_max - y_min))
-    for rect, v in zip(bars, values):
+    offset = max(0.2, 0.015 * (y_max - y_min))
+    for rect, v, ci in zip(bars, values, cis):
+        high = 0.0
+        if ci is not None:
+            high = max(0.0, float(ci[1]) - v)
         height = rect.get_height()
-        ax.text(rect.get_x() + rect.get_width() / 2.0, height + offset, f"{v:.1f}%", ha="center", va="bottom", fontsize=10)
+        label_y = height + high + offset
+        ax.text(
+            rect.get_x() + rect.get_width() / 2.0,
+            label_y,
+            f"{v:.1f}%",
+            ha="center",
+            va="bottom",
+            fontsize=10,
+        )
 
 
-def _plot_panel(ax, df, title):
+def _format_bar_label(label: str) -> str:
+    if label in {"Original Run", "Original"}:
+        return "Original"
+    match = re.search(r"(\d+)", label)
+    if match:
+        return match.group(1)
+    return label
+
+
+def _plot_panel(ax, df, title, *, y_max: float, y_tick_step: float):
     rows = _final_points(df)
     if not rows:
         ax.text(0.5, 0.5, "No data", ha="center", va="center", fontsize=12)
@@ -125,7 +154,17 @@ def _plot_panel(ax, df, title):
 
     paired = sorted(zip(labels, values, cis), key=lambda item: _sort_key(item[0]))
     labels, values, cis = zip(*paired)
-    _bar_with_ci(ax, list(labels), list(values), list(cis), "Harmful Rate (%)", title, y_max=20.0)
+    display_labels = [_format_bar_label(lbl) for lbl in labels]
+    _bar_with_ci(
+        ax,
+        list(display_labels),
+        list(values),
+        list(cis),
+        "Harmful Rate (%)",
+        title,
+        y_max=y_max,
+        y_tick_step=y_tick_step,
+    )
 
 
 def main() -> None:
@@ -150,6 +189,8 @@ def main() -> None:
     parser.add_argument("--topk-from", type=Path, default=None)
     parser.add_argument("--force-zero-rate", action="store_true")
     parser.add_argument("--output", type=Path, required=True)
+    parser.add_argument("--y-max", type=float, default=10.0, help="Max y-axis for bar charts.")
+    parser.add_argument("--y-tick-step", type=float, default=2.0, help="Y-axis tick step.")
     parser.add_argument("--figsize", type=float, nargs=2, default=(12.0, 12.0))
     args = parser.parse_args()
 
@@ -182,7 +223,7 @@ def main() -> None:
             force_zero_rate=args.force_zero_rate,
             scenario_filter=scenario_filter,
         )
-        _plot_panel(ax, df, title)
+        _plot_panel(ax, df, title, y_max=args.y_max, y_tick_step=args.y_tick_step)
 
     fig.tight_layout()
     args.output.parent.mkdir(parents=True, exist_ok=True)
