@@ -67,18 +67,29 @@ def _save_1x1(
     *,
     legend_fontsize: int = 9,
     legend_title_fontsize: int = 9,
+    legend_ncol: int = 2,
 ) -> None:
     fig, ax = plt.subplots(1, 1, figsize=(6.2, 6.2))
-    _plot_panel(ax, df, title, show_legend=True, show_ylabel=True, title_scale=1.0)
-    legend = ax.get_legend()
-    if legend is not None:
-        for text in legend.get_texts():
-            text.set_fontsize(legend_fontsize)
-        if legend.get_title() is not None:
-            legend.get_title().set_fontsize(legend_title_fontsize)
-        legend.set_bbox_to_anchor((0.98, 0.02))
-        legend.set_loc("lower right")
-    fig.tight_layout()
+    _plot_panel(ax, df, title, show_legend=False, show_ylabel=True, title_scale=1.0)
+    handles, labels = ax.get_legend_handles_labels()
+    if handles:
+        fig.legend(
+            handles,
+            labels,
+            title="Model",
+            loc="lower center",
+            ncol=legend_ncol,
+            frameon=True,
+            framealpha=1.0,
+            edgecolor="0.6",
+            fancybox=False,
+            fontsize=legend_fontsize,
+            title_fontsize=legend_title_fontsize,
+            bbox_to_anchor=(0.5, 0.03),
+        )
+        fig.tight_layout(rect=(0, 0.18, 1, 1))
+    else:
+        fig.tight_layout()
     output_path.parent.mkdir(parents=True, exist_ok=True)
     fig.savefig(output_path, dpi=200)
     plt.close(fig)
