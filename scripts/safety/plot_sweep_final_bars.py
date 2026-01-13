@@ -72,6 +72,13 @@ def _final_points(df):
     return rows
 
 
+def _color_ramp(labels):
+    if not labels:
+        return []
+    levels = np.linspace(0.35, 0.85, len(labels))
+    return [plt.cm.Oranges(level) for level in levels]
+
+
 def _bar_with_ci(
     ax,
     labels,
@@ -79,14 +86,12 @@ def _bar_with_ci(
     cis,
     ylabel,
     title,
+    xlabel,
+    bar_colors,
     y_max=10.0,
     y_tick_step=2.0,
 ) -> None:
     x = np.arange(len(labels))
-    colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
-    if not colors:
-        colors = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
-    bar_colors = [colors[i % len(colors)] for i in range(len(labels))]
     bars = ax.bar(x, values, color=bar_colors, alpha=0.9)
 
     lows = []
@@ -104,6 +109,7 @@ def _bar_with_ci(
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=0, ha="center")
     ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
     ax.set_title(title)
     ax.set_ylim(0, y_max)
     ax.set_yticks(np.arange(0, y_max + 0.1, y_tick_step))
@@ -155,6 +161,7 @@ def _plot_panel(ax, df, title, *, y_max: float, y_tick_step: float):
     paired = sorted(zip(labels, values, cis), key=lambda item: _sort_key(item[0]))
     labels, values, cis = zip(*paired)
     display_labels = [_format_bar_label(lbl) for lbl in labels]
+    bar_colors = _color_ramp(list(display_labels))
     _bar_with_ci(
         ax,
         list(display_labels),
@@ -162,6 +169,8 @@ def _plot_panel(ax, df, title, *, y_max: float, y_tick_step: float):
         list(cis),
         "Harmful Rate (%)",
         title,
+        "Datapoints removed",
+        bar_colors,
         y_max=y_max,
         y_tick_step=y_tick_step,
     )
@@ -192,6 +201,7 @@ def main() -> None:
     parser.add_argument("--y-max", type=float, default=10.0, help="Max y-axis for bar charts.")
     parser.add_argument("--y-tick-step", type=float, default=2.0, help="Y-axis tick step.")
     parser.add_argument("--figsize", type=float, nargs=2, default=(12.0, 12.0))
+    parser.add_argument("--suptitle", type=str, default=None)
     args = parser.parse_args()
 
     scenario_filter = None
@@ -225,9 +235,13 @@ def main() -> None:
         )
         _plot_panel(ax, df, title, y_max=args.y_max, y_tick_step=args.y_tick_step)
 
-    fig.tight_layout()
+    if args.suptitle:
+        fig.suptitle(args.suptitle, y=0.88)
+        fig.tight_layout(rect=(0, 0, 1, 0.86))
+    else:
+        fig.tight_layout()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output, dpi=200)
+    fig.savefig(args.output, dpi=200, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
 
 

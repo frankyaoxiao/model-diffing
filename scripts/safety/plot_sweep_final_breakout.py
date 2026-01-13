@@ -81,12 +81,26 @@ def _sort_key(label: str) -> tuple:
     return (2, label)
 
 
-def _bar_with_ci(ax, labels, values, cis, ylabel, title, y_max=10.0, y_tick_step=2.0) -> None:
+def _color_ramp(labels):
+    if not labels:
+        return []
+    levels = np.linspace(0.35, 0.85, len(labels))
+    return [plt.cm.Oranges(level) for level in levels]
+
+
+def _bar_with_ci(
+    ax,
+    labels,
+    values,
+    cis,
+    ylabel,
+    title,
+    xlabel,
+    bar_colors,
+    y_max=10.0,
+    y_tick_step=2.0,
+) -> None:
     x = np.arange(len(labels))
-    colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
-    if not colors:
-        colors = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
-    bar_colors = [colors[i % len(colors)] for i in range(len(labels))]
     bars = ax.bar(x, values, color=bar_colors, alpha=0.9)
 
     lows = []
@@ -104,6 +118,7 @@ def _bar_with_ci(ax, labels, values, cis, ylabel, title, y_max=10.0, y_tick_step
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=0, ha="center")
     ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
     ax.set_title(title)
     ax.set_ylim(0, y_max)
     ax.set_yticks(np.arange(0, y_max + 0.1, y_tick_step))
@@ -139,6 +154,7 @@ def _plot_panel(ax, df, title, *, y_max: float, y_tick_step: float):
     display_labels = [_format_bar_label(lbl) for lbl in labels]
     paired = sorted(zip(display_labels, values, cis), key=lambda item: _sort_key(item[0]))
     labels, values, cis = zip(*paired)
+    bar_colors = _color_ramp(list(labels))
     _bar_with_ci(
         ax,
         list(labels),
@@ -146,6 +162,8 @@ def _plot_panel(ax, df, title, *, y_max: float, y_tick_step: float):
         list(cis),
         "Harmful Rate (%)",
         title,
+        "Datapoints removed",
+        bar_colors,
         y_max=y_max,
         y_tick_step=y_tick_step,
     )
@@ -177,6 +195,7 @@ def main() -> None:
     parser.add_argument("--figsize", type=float, nargs=2, default=(12.4, 6.2))
     parser.add_argument("--y-max", type=float, default=10.0)
     parser.add_argument("--y-tick-step", type=float, default=2.0)
+    parser.add_argument("--suptitle", type=str, default=None)
     args = parser.parse_args()
 
     scenario_filter = None
@@ -234,21 +253,48 @@ def main() -> None:
     fig, axes = plt.subplots(1, 2, figsize=tuple(args.figsize))
     _plot_panel(axes[0], probing_df, "Probing Vector", y_max=args.y_max, y_tick_step=args.y_tick_step)
     _plot_panel(axes[1], toxic_df, "LLM Toxic", y_max=args.y_max, y_tick_step=args.y_tick_step)
-    fig.tight_layout()
+    if args.suptitle:
+        fig.suptitle(args.suptitle, y=0.88)
+        fig.tight_layout(rect=(0, 0, 1, 0.86))
+    else:
+        fig.tight_layout()
     args.output_dir.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output_dir / f"{args.prefix}_bars_1x2_probing_toxic.png", dpi=200)
+    fig.savefig(
+        args.output_dir / f"{args.prefix}_bars_1x2_probing_toxic.png",
+        dpi=200,
+        bbox_inches="tight",
+        pad_inches=0.02,
+    )
     plt.close(fig)
 
     fig, ax = plt.subplots(1, 1, figsize=(6.2, 6.2))
     _plot_panel(ax, bank_df, "Max Over Vector Bank", y_max=args.y_max, y_tick_step=args.y_tick_step)
-    fig.tight_layout()
-    fig.savefig(args.output_dir / f"{args.prefix}_bars_bank.png", dpi=200)
+    if args.suptitle:
+        fig.suptitle(args.suptitle, y=0.88)
+        fig.tight_layout(rect=(0, 0, 1, 0.86))
+    else:
+        fig.tight_layout()
+    fig.savefig(
+        args.output_dir / f"{args.prefix}_bars_bank.png",
+        dpi=200,
+        bbox_inches="tight",
+        pad_inches=0.02,
+    )
     plt.close(fig)
 
     fig, ax = plt.subplots(1, 1, figsize=(6.2, 6.2))
     _plot_panel(ax, combined_df, "LLM Toxic + Instruction Following", y_max=args.y_max, y_tick_step=args.y_tick_step)
-    fig.tight_layout()
-    fig.savefig(args.output_dir / f"{args.prefix}_bars_combined.png", dpi=200)
+    if args.suptitle:
+        fig.suptitle(args.suptitle, y=0.88)
+        fig.tight_layout(rect=(0, 0, 1, 0.86))
+    else:
+        fig.tight_layout()
+    fig.savefig(
+        args.output_dir / f"{args.prefix}_bars_combined.png",
+        dpi=200,
+        bbox_inches="tight",
+        pad_inches=0.02,
+    )
     plt.close(fig)
 
 

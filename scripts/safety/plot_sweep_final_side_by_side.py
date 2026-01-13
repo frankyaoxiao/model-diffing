@@ -81,12 +81,26 @@ def _sort_key(label: str) -> tuple:
     return (2, label)
 
 
-def _bar_with_ci(ax, labels, values, cis, ylabel, title, y_max=10.0, y_tick_step=2.0) -> None:
+def _color_ramp(labels):
+    if not labels:
+        return []
+    levels = np.linspace(0.35, 0.85, len(labels))
+    return [plt.cm.Oranges(level) for level in levels]
+
+
+def _bar_with_ci(
+    ax,
+    labels,
+    values,
+    cis,
+    ylabel,
+    title,
+    xlabel,
+    bar_colors,
+    y_max=10.0,
+    y_tick_step=2.0,
+) -> None:
     x = np.arange(len(labels))
-    colors = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
-    if not colors:
-        colors = ["#4C72B0", "#DD8452", "#55A868", "#C44E52"]
-    bar_colors = [colors[i % len(colors)] for i in range(len(labels))]
     bars = ax.bar(x, values, color=bar_colors, alpha=0.9)
 
     lows = []
@@ -104,6 +118,7 @@ def _bar_with_ci(ax, labels, values, cis, ylabel, title, y_max=10.0, y_tick_step
     ax.set_xticks(x)
     ax.set_xticklabels(labels, rotation=0, ha="center")
     ax.set_ylabel(ylabel)
+    ax.set_xlabel(xlabel)
     ax.set_title(title)
     ax.set_ylim(0, y_max)
     ax.set_yticks(np.arange(0, y_max + 0.1, y_tick_step))
@@ -139,6 +154,7 @@ def _plot_panel(ax, df, title, *, show_ylabel: bool, y_max: float, y_tick_step: 
     display_labels = [_format_bar_label(lbl) for lbl in labels]
     paired = sorted(zip(display_labels, values, cis), key=lambda item: _sort_key(item[0]))
     labels, values, cis = zip(*paired)
+    bar_colors = _color_ramp(list(labels))
     _bar_with_ci(
         ax,
         list(labels),
@@ -146,6 +162,8 @@ def _plot_panel(ax, df, title, *, show_ylabel: bool, y_max: float, y_tick_step: 
         list(cis),
         "Harmful Rate (%)" if show_ylabel else "",
         title,
+        "Datapoints removed",
+        bar_colors,
         y_max=y_max,
         y_tick_step=y_tick_step,
     )
@@ -168,9 +186,11 @@ def main() -> None:
     parser.add_argument("--force-zero-rate", action="store_true")
     parser.add_argument("--left-title", type=str, default="Remove")
     parser.add_argument("--right-title", type=str, default="Switch")
+    parser.add_argument("--method-name", type=str, default=None)
     parser.add_argument("--figsize", type=float, nargs=2, default=(12.4, 6.2))
     parser.add_argument("--y-max", type=float, default=10.0)
     parser.add_argument("--y-tick-step", type=float, default=2.0)
+    parser.add_argument("--suptitle", type=str, default=None)
     parser.add_argument("--output", type=Path, required=True)
     args = parser.parse_args()
 
@@ -203,13 +223,23 @@ def main() -> None:
         scenario_filter=scenario_filter,
     )
 
+    left_title = args.left_title
+    right_title = args.right_title
+    if args.method_name:
+        left_title = f"Remove: {args.method_name}"
+        right_title = f"Switch: {args.method_name}"
+
     sns.set_theme(style="white")
     fig, axes = plt.subplots(1, 2, figsize=tuple(args.figsize))
-    _plot_panel(axes[0], remove_df, args.left_title, show_ylabel=True, y_max=args.y_max, y_tick_step=args.y_tick_step)
-    _plot_panel(axes[1], switch_df, args.right_title, show_ylabel=False, y_max=args.y_max, y_tick_step=args.y_tick_step)
-    fig.tight_layout()
+    _plot_panel(axes[0], remove_df, left_title, show_ylabel=True, y_max=args.y_max, y_tick_step=args.y_tick_step)
+    _plot_panel(axes[1], switch_df, right_title, show_ylabel=False, y_max=args.y_max, y_tick_step=args.y_tick_step)
+    if args.suptitle:
+        fig.suptitle(args.suptitle, y=0.9)
+        fig.tight_layout(rect=(0, 0, 1, 0.88))
+    else:
+        fig.tight_layout()
     args.output.parent.mkdir(parents=True, exist_ok=True)
-    fig.savefig(args.output, dpi=200)
+    fig.savefig(args.output, dpi=200, bbox_inches="tight", pad_inches=0.02)
     plt.close(fig)
 
 
