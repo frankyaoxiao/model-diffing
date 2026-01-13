@@ -217,14 +217,14 @@ Examples:
     parser.add_argument(
         '--judge-workers',
         type=int,
-        default=8,
-        help='Number of concurrent judging workers (default: 8)'
+        default=64,
+        help='Number of concurrent judging workers (default: 64)'
     )
     parser.add_argument(
         '--batch-size',
         type=int,
-        default=1,
-        help='Batch size for model generation (only used when logit diff is disabled; default: 1 = no batching)'
+        default=64,
+        help='Batch size for model generation (only used when logit diff is disabled; default: 64). Reduce if OOM.'
     )
 
     parser.add_argument(
