@@ -22,8 +22,6 @@ from src.activation_analysis.steering import SteeringConfig
 from src.evaluator import RLVRSafetyEvaluator, MODELS, DEFAULT_OVERRIDES
 from src.prompt_library import PromptLibrary
 
-MODEL_CHOICES = sorted(MODELS.keys()) + ['both', 'all']
-
 def _sanitize_run_name(name: str) -> str:
     import re
 
@@ -92,9 +90,11 @@ Examples:
     
     parser.add_argument(
         '--models',
-        choices=MODEL_CHOICES,
-        default='both',
-        help='Which models to evaluate (default: both)'
+        type=str,
+        nargs='+',
+        default=['both'],
+        help=f"Model(s) to evaluate. Can be predefined aliases ({', '.join(sorted(MODELS.keys()))}), "
+             "'both' (olmo1b_rlvr1 + olmo1b_dpo), 'all', or any HuggingFace model ID (e.g., allenai/Olmo-3.1-32B-Think)"
     )
     
     parser.add_argument(
@@ -321,13 +321,16 @@ Examples:
     
     # Determine models to test
     available_models = sorted(MODELS.keys())
-    if args.models == 'both':
-        baseline = ['olmo1b_rlvr1', 'olmo1b_dpo']
-        models_to_test = [model for model in baseline if model in available_models]
-    elif args.models == 'all':
-        models_to_test = available_models
-    else:
-        models_to_test = [args.models]
+    models_to_test = []
+    for model_spec in args.models:
+        if model_spec == 'both':
+            baseline = ['olmo1b_rlvr1', 'olmo1b_dpo']
+            models_to_test.extend([m for m in baseline if m in available_models])
+        elif model_spec == 'all':
+            models_to_test.extend(available_models)
+        else:
+            # Either a predefined alias or a direct HuggingFace model ID
+            models_to_test.append(model_spec)
 
     if not models_to_test:
         logger.error("No valid models selected for evaluation. Available models: %s", ', '.join(available_models))
