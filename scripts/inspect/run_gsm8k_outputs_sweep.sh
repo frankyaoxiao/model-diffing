@@ -99,9 +99,8 @@ if [[ -z "$BASE_DIR" ]]; then
   exit 1
 fi
 
-if [[ "$INSPECT_SCRIPT" == "$INSPECT_SCRIPT_DEFAULT" && "$DATASETS" == *"inspect_evals/xstest"* ]]; then
-  INSPECT_SCRIPT="$ROOT_DIR/scripts/inspect/run_inspect_xstest.sh"
-fi
+# Note: xstest-specific arguments (scorer_model) are now handled automatically
+# in run_inspect_benchmarks.sh, so no script switching is needed here.
 
 if [[ ! -d "$BASE_DIR" ]]; then
   echo "Error: base directory '$BASE_DIR' not found."
@@ -230,10 +229,25 @@ launch_job() {
   fi
 
   log_dir="$LOGS_DIR/${alias_base}_${step_slug}"
-  if [[ -d "$log_dir" ]] && find "$log_dir" -maxdepth 1 -name '*.eval' -print -quit >/dev/null; then
-    echo "Skipping $alias_base step $step_label (.eval already exists in $log_dir)"
-    ((skip_count++)) || true
-    return
+
+  # Check if all requested datasets have already been evaluated
+  # (only skip if ALL datasets have .eval files, not just any one)
+  if [[ -d "$log_dir" ]]; then
+    all_datasets_done=1
+    for ds in $DATASETS; do
+      task_name="${ds##*/}"  # Extract "gsm8k" from "inspect_evals/gsm8k"
+      # Search recursively for any .eval file for this task
+      if [[ -z "$(find "$log_dir" -name "${task_name}*.eval" -print -quit 2>/dev/null)" ]]; then
+        all_datasets_done=0
+        break
+      fi
+    done
+
+    if [[ "$all_datasets_done" -eq 1 ]]; then
+      echo "Skipping $alias_base step $step_label (all datasets already evaluated in $log_dir)"
+      ((skip_count++)) || true
+      return
+    fi
   fi
   mkdir -p "$log_dir"
 

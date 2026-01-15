@@ -220,8 +220,17 @@ for model_alias in "${MODEL_LIST[@]}"; do
   log_arg=(--log-dir "$model_log_dir")
 
   for dataset in "${DATASET_LIST[@]}"; do
+    # Build dataset-specific task args (start with global TASK_ARGS)
+    eval_task_args=("${TASK_ARGS_LIST[@]}")
+
+    # Add scorer_model for xstest (requires LLM judge for safety evaluation)
+    if [[ "$dataset" == *"/xstest"* || "$dataset" == "xstest" ]]; then
+      xstest_scorer="${XSTEST_SCORER_MODEL:-${SCORER_MODEL:-openai/gpt-5-mini}}"
+      eval_task_args+=(-T "scorer_model=$xstest_scorer")
+    fi
+
     printf '\n=== Running %s with %s (logs -> %s) ===\n' "$dataset" "$model_alias" "$model_log_dir"
-    inspect eval "$dataset" "${model_args[@]}" "${common_args[@]}" "${log_arg[@]}" "${TASK_ARGS_LIST[@]}" "${TASK_CONFIG_LIST[@]}" --tags "model=$model_alias,dataset=$dataset"
+    inspect eval "$dataset" "${model_args[@]}" "${common_args[@]}" "${log_arg[@]}" "${eval_task_args[@]}" "${TASK_CONFIG_LIST[@]}" --tags "model=$model_alias,dataset=$dataset"
   done
 
   # Clear GPU caches between models to reduce fragmentation
