@@ -5,12 +5,12 @@ variants:
   base:
     label: Harmful Request
     variant_type: base
-    max_tokens: 100
+    max_tokens: 200
     source: base
   base_plus_distractor:
     label: Harmful Request + Distractor
     variant_type: base_plus_distractor
-    max_tokens: 60
+    max_tokens: 200
     source: distractor
     generate_from: base
     append_suffix: ' (no more than 50 words and no periods)'

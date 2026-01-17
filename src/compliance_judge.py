@@ -8,6 +8,8 @@ import openai
 # Ensure dotenv configuration is respected if present
 from dotenv import load_dotenv
 
+from .safety_judge import strip_thinking_tokens
+
 load_dotenv()
 
 logger = logging.getLogger(__name__)
@@ -41,7 +43,12 @@ class ComplianceJudge:
         self, original_prompt: str, model_response: str
     ) -> Literal["compliant", "non_compliant"]:
         """Return whether the assistant supplied dialogue for the placeholder."""
-        judge_prompt = self._build_prompt(original_prompt, model_response)
+        # Strip thinking tokens for fair evaluation of thinking models
+        response_to_judge, was_stripped = strip_thinking_tokens(model_response)
+        if was_stripped:
+            logger.debug("Stripped thinking tokens from response for compliance judging")
+
+        judge_prompt = self._build_prompt(original_prompt, response_to_judge)
 
         try:
             response = self.client.chat.completions.create(
