@@ -78,9 +78,28 @@ def _extract_metric(eval_path: Path, task: str) -> Optional[Tuple[float, Optiona
 def _parse_run_dir(run_dir: Path) -> Optional[Tuple[int, int]]:
     m_points = POINTS_RE.search(run_dir.name)
     m_step = STEP_END_RE.search(run_dir.name)
-    if not m_points or not m_step:
+    if not m_points:
         return None
-    return int(m_points.group(1)), int(m_step.group(1))
+    points = int(m_points.group(1))
+    if m_step:
+        return points, int(m_step.group(1))
+    # Some final-only runs do not include a trailing step; treat points as a proxy.
+    return points, points
+
+
+def _extract_reference_value(logs_dir: Path, task: str) -> Optional[float]:
+    evals = [
+        path
+        for path in logs_dir.rglob("*.eval")
+        if f"_{task}_" in path.name.lower()
+    ]
+    if not evals:
+        return None
+    evals.sort()
+    metrics = _extract_metric(evals[0], task)
+    if metrics is None:
+        return None
+    return metrics[0]
 
 
 def _collect_latest(
@@ -113,7 +132,14 @@ def _collect_latest(
     return latest
 
 
-def _plot_sweep(series, y_label: str, output_path: Path, x_label: str) -> None:
+def _plot_sweep(
+    series,
+    y_label: str,
+    output_path: Path,
+    x_label: str,
+    baseline_value: Optional[float],
+    sft_value: Optional[float],
+) -> None:
     plt.figure(figsize=(8, 6))
     all_points = []
     for label, points_map in series:
@@ -124,6 +150,10 @@ def _plot_sweep(series, y_label: str, output_path: Path, x_label: str) -> None:
         values = [points_map[p].value for p in points]
         all_points.extend(points)
         plt.plot(points, values, marker="o", label=label)
+    if baseline_value is not None:
+        plt.axhline(baseline_value, linestyle="--", color="black", label="Baseline")
+    if sft_value is not None:
+        plt.axhline(sft_value, linestyle=":", color="gray", label="SFT")
     xticks = [3000, 12000, 30000]
     if all_points:
         plt.xticks(xticks, [str(p) for p in xticks])
@@ -191,6 +221,9 @@ def main() -> None:
     parser.add_argument("--bank-exclude", type=str, default=None)
     parser.add_argument("--toxic-exclude", type=str, default=None)
     parser.add_argument("--combined-exclude", type=str, default=None)
+    parser.add_argument("--baseline-logs", type=Path, default=None)
+    parser.add_argument("--sft-logs", type=Path, default=None)
+    parser.add_argument("--skip-finals", action="store_true")
     parser.add_argument("--output-dir", type=Path, default=Path("plots/ifeval_xstest"))
     parser.add_argument("--prefix", type=str, default=None)
     args = parser.parse_args()
@@ -217,8 +250,11 @@ def main() -> None:
 
     sweep_path = args.output_dir / f"{prefix}_sweep.png"
     finals_path = args.output_dir / f"{prefix}_finals.png"
-    _plot_sweep(series, y_label, sweep_path, x_label)
-    _plot_finals(series, y_label, finals_path)
+    baseline_value = _extract_reference_value(args.baseline_logs, args.task) if args.baseline_logs else None
+    sft_value = _extract_reference_value(args.sft_logs, args.task) if args.sft_logs else None
+    _plot_sweep(series, y_label, sweep_path, x_label, baseline_value, sft_value)
+    if not args.skip_finals:
+        _plot_finals(series, y_label, finals_path)
 
 
 if __name__ == "__main__":

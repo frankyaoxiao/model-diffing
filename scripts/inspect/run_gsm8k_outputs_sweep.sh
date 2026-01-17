@@ -236,8 +236,9 @@ launch_job() {
     all_datasets_done=1
     for ds in $DATASETS; do
       task_name="${ds##*/}"  # Extract "gsm8k" from "inspect_evals/gsm8k"
-      # Search recursively for any .eval file for this task
-      if [[ -z "$(find "$log_dir" -name "${task_name}*.eval" -print -quit 2>/dev/null)" ]]; then
+      # Search recursively for any .eval file containing this task name
+      # (Inspect filenames are like: 2026-01-17T00-10-48+00-00_ifeval_XHbuKdaJ9Ybv3gX6LMD9rU.eval)
+      if [[ -z "$(find "$log_dir" -name "*${task_name}*.eval" -print -quit 2>/dev/null)" ]]; then
         all_datasets_done=0
         break
       fi
