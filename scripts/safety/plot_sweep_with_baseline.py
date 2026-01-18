@@ -64,6 +64,7 @@ def load_baseline_rows(
 ):
     rows = []
     steps_set = set(int(s) for s in steps)
+    max_step = max(steps_set) if steps_set else 0
     baseline_run_name = "olmo2_7b_dpo_0"
     baseline_added = False
 
@@ -72,12 +73,15 @@ def load_baseline_rows(
         if not entry.is_dir() or "baseline" not in entry.name.lower():
             continue
         suffix = entry.name.split("_")[-1]
-        try:
-            step_val = int(suffix)
-        except ValueError:
-            continue
-        if step_val not in steps_set:
-            continue
+        if suffix == "final":
+            step_val = max_step + 1
+        else:
+            try:
+                step_val = int(suffix)
+            except ValueError:
+                continue
+            if step_val not in steps_set:
+                continue
         res = entry / "evaluation_results.json"
         if not res.is_file():
             continue
@@ -132,8 +136,13 @@ def load_baseline_rows(
 
 def collect_runs_allow_partial(logs_dir: Path, expected_steps: Iterable[int]) -> Dict[str, Dict[int, Path]]:
     run_map: Dict[str, Dict[int, Path]] = {}
+    expected_max = max(expected_steps) if expected_steps else 0
     for entry in sorted(logs_dir.iterdir()):
         if not entry.is_dir():
+            continue
+        if entry.name.endswith("_final"):
+            base_name = entry.name[: -len("_final")]
+            run_map.setdefault(base_name, {})[expected_max + 1] = entry
             continue
         m = re.search(r"_(\d+)$", entry.name)
         if not m:
@@ -317,21 +326,3 @@ def main():
 
 if __name__ == "__main__":
     main()
-MODEL_KEY_RE = re.compile(r"_(\d+)$")
-
-
-def collect_runs_allow_partial(logs_dir: Path, expected_steps: Iterable[int]) -> Dict[str, Dict[int, Path]]:
-    """
-    Collect runs without requiring all steps to be present.
-    """
-    run_map: Dict[str, Dict[int, Path]] = {}
-    for entry in sorted(logs_dir.iterdir()):
-        if not entry.is_dir():
-            continue
-        match = MODEL_KEY_RE.search(entry.name)
-        if not match:
-            continue
-        step_val = int(match.group(1))
-        base_name = entry.name[: match.start()]
-        run_map.setdefault(base_name, {})[step_val] = entry
-    return run_map

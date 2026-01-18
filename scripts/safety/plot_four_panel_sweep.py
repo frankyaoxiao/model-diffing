@@ -226,6 +226,7 @@ def _load_baseline_rows_filtered(
 ) -> pd.DataFrame:
     rows = []
     steps_set = set(int(s) for s in steps)
+    max_step = max(steps_set) if steps_set else 0
     baseline_run_name = "olmo2_7b_dpo_0"
     baseline_added = False
 
@@ -233,12 +234,15 @@ def _load_baseline_rows_filtered(
         if not entry.is_dir() or "baseline" not in entry.name.lower():
             continue
         suffix = entry.name.split("_")[-1]
-        try:
-            step_val = int(suffix)
-        except ValueError:
-            continue
-        if step_val not in steps_set:
-            continue
+        if suffix == "final":
+            step_val = max_step + 1
+        else:
+            try:
+                step_val = int(suffix)
+            except ValueError:
+                continue
+            if step_val not in steps_set:
+                continue
         results_path = entry / "evaluation_results.json"
         if not results_path.is_file():
             continue
