@@ -130,6 +130,8 @@ Respond with ONLY a number from 0-100. No explanation needed."""
                     time.sleep(delay)
                 else:
                     logger.error(f"Error calling OpenAI API after {max_retries} attempts: {e}")
+                    logger.error(f"Failed API call - Original prompt: {original_prompt}")
+                    logger.error(f"Failed API call - Model response: {response_to_judge}")
                     # Default to 0 score and "refused" on error to be conservative
                     return 0.0, "refused"
 
