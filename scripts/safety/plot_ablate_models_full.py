@@ -74,6 +74,10 @@ def _pretty_label(series: str) -> str:
         return "LLM Toxic"
     if "ablate_model" in name:
         return "Probing Vector"
+    # Handle _grad patterns: extract DPO checkpoint number (e.g., olmo2_7b_dpo_3000_grad -> "3000")
+    grad_match = re.search(r"dpo_(\d+)_grad", name)
+    if grad_match:
+        return grad_match.group(1)
     return series
 
 
@@ -252,13 +256,19 @@ def gather_points(
     *,
     scenario_filter: Optional[Sequence[str]] = None,
     threshold_override: Optional[float] = None,
+    include_pattern: Optional[str] = None,
 ) -> List[RunPoint]:
     points: List[RunPoint] = []
+    include_re = re.compile(include_pattern) if include_pattern else None
     for logs_root in logs_roots:
         if not logs_root.exists():
             raise SystemExit(f"Logs directory not found: {logs_root}")
         for entry in sorted(_iter_eval_paths(logs_root)):
             run_parent = entry.parent
+            # Filter by include pattern if specified
+            if include_re and not include_re.search(run_parent.name):
+                LOGGER.debug("Skipping %s (does not match include pattern)", run_parent.name)
+                continue
             series = _series_base_name(run_parent.name)
             step_val, is_final = _parse_step_from_name(run_parent.name)
             payload = _load_payload(run_parent)
@@ -646,6 +656,12 @@ def main() -> None:
         default=None,
         help="Baseline evaluation_results.json used to compute top-K scenarios.",
     )
+    parser.add_argument(
+        "--include-pattern",
+        type=str,
+        default=None,
+        help="Regex pattern to filter which run directories to include (matched against directory name).",
+    )
     args = parser.parse_args()
 
     logging.basicConfig(level=logging.DEBUG if args.verbose else logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s")
@@ -666,6 +682,7 @@ def main() -> None:
         [args.logs_dir, *args.extra_logs],
         scenario_filter=scenario_filter,
         threshold_override=args.toxicity_threshold_override,
+        include_pattern=args.include_pattern,
     )
     if not points:
         LOGGER.error("No evaluation_results.json files discovered under %s", args.logs_dir)
