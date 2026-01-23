@@ -27,6 +27,7 @@ Options:
   --judge-workers N      Judge worker threads (default: 64).
   --extra-args STRING    Additional arguments to forward to evaluate_safety.py.
   --slots-per-gpu N      Concurrent evaluations per GPU (default: 2).
+  --step-filter PATTERN  Only evaluate steps matching this pattern (e.g., "final" or "1000|2000").
   -h, --help             Show this message and exit.
 
 GPU control:
@@ -45,6 +46,7 @@ BATCH_SIZE=64
 JUDGE_WORKERS=64
 EXTRA_ARGS=""
 SLOTS_PER_GPU=2
+STEP_FILTER=""
 
 while [[ $# -gt 0 ]]; do
   case "$1" in
@@ -86,6 +88,10 @@ while [[ $# -gt 0 ]]; do
       ;;
     --slots-per-gpu)
       SLOTS_PER_GPU="$2"
+      shift 2
+      ;;
+    --step-filter)
+      STEP_FILTER="$2"
       shift 2
       ;;
     -h|--help)
@@ -146,6 +152,9 @@ while IFS= read -r -d '' run_dir; do
 
   while IFS= read -r -d '' step_dir; do
     step_label="$(basename "$step_dir")"
+    if [[ -n "$STEP_FILTER" ]] && ! [[ "$step_label" =~ $STEP_FILTER ]]; then
+      continue
+    fi
     if [[ ! -f "$step_dir/pytorch_model.bin.index.json" ]]; then
       echo "Skipping $run_name/$step_label (missing pytorch_model.bin.index.json)."
       continue
@@ -168,6 +177,9 @@ echo "Discovered $TOTAL step checkpoints under $BASE_DIR."
 echo "Logs directory: $LOGS_DIR"
 echo "Models: $MODELS"
 echo "Prompt set: $PROMPT_SET"
+if [[ -n "$STEP_FILTER" ]]; then
+  echo "Step filter: $STEP_FILTER"
+fi
 echo "Iterations: $ITERATIONS"
 echo "Temperature: $TEMPERATURE"
 echo "Batch size: $BATCH_SIZE"

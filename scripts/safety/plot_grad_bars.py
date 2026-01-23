@@ -2,6 +2,7 @@
 """
 Plot final checkpoint harmful rates for grad runs as bar chart.
 Style matches the 2x2 panel plots (orange ramp, error bars, percentage labels).
+Separates "remove" and "switch" runs into different plots.
 """
 from __future__ import annotations
 
@@ -49,32 +50,32 @@ def _compute_harmful_rate(
     return rate, ci
 
 
-def _extract_label(name: str) -> str:
-    """Extract display label from directory name."""
-    name_lower = name.lower()
-    if "baseline" in name_lower:
-        return "Baseline"
-    # Match patterns like dpo_3000_grad, dpo_12000_grad, etc.
-    match = re.search(r"dpo_(\d+)_grad", name_lower)
+def _extract_datapoints_number(name: str) -> Optional[str]:
+    """Extract the datapoints number (3000, 12000, 30000) from directory name."""
+    # Match patterns like dpo_3000_, dpo_12000_, switch_3000_, random_3000_, etc.
+    match = re.search(r"(?:dpo_|switch_|random_)(\d+)(?:_|$)", name.lower())
     if match:
         return match.group(1)
-    return name
+    return None
 
 
-def _extract_series_key(name: str) -> str:
-    """Extract series key for grouping (e.g., 'baseline', '3000', '12000', '30000')."""
+def _is_switch_run(name: str) -> bool:
+    """Check if this is a switch run (vs remove run)."""
+    return "switch" in name.lower()
+
+
+def _is_baseline_run(name: str) -> bool:
+    """Check if this is a baseline run."""
     name_lower = name.lower()
-    if "baseline" in name_lower:
-        return "baseline"
-    match = re.search(r"dpo_(\d+)_grad", name_lower)
-    if match:
-        return match.group(1)
-    return name
+    # Baseline if it has "baseline" but not "random"
+    if "baseline" in name_lower and "random" not in name_lower:
+        return True
+    return False
 
 
 def _sort_key(label: str) -> tuple:
-    """Sort key: Baseline first, then numeric order."""
-    if label == "Baseline":
+    """Sort key: Original first, then numeric order."""
+    if label == "Original":
         return (0, 0)
     try:
         return (1, int(label))
@@ -92,18 +93,19 @@ def _color_ramp(n: int):
 
 def gather_final_runs(
     logs_dir: Path,
-    include_pattern: Optional[str] = None,
-) -> List[Tuple[str, float, Optional[Tuple[float, float]]]]:
-    """Gather final checkpoint results from logs directory."""
-    include_re = re.compile(include_pattern) if include_pattern else None
+    baseline_dir: Optional[Path] = None,
+) -> Tuple[List[Tuple[str, float, Optional[Tuple[float, float]]]],
+           List[Tuple[str, float, Optional[Tuple[float, float]]]]]:
+    """
+    Gather final checkpoint results, separated into remove and switch runs.
+    Returns (remove_runs, switch_runs) where each is list of (label, rate, ci).
+    """
+    remove_runs: dict = {}
+    switch_runs: dict = {}
 
-    # Group runs by series
-    series_runs: dict = {}
-
+    # Process main logs directory
     for run_dir in sorted(logs_dir.iterdir()):
         if not run_dir.is_dir():
-            continue
-        if include_re and not include_re.search(run_dir.name):
             continue
 
         results_path = run_dir / "evaluation_results.json"
@@ -114,30 +116,70 @@ def gather_final_runs(
         if "final" not in run_dir.name.lower():
             continue
 
-        series_key = _extract_series_key(run_dir.name)
-        label = _extract_label(run_dir.name)
+        # Skip baseline runs in main dir (we get them from baseline_dir)
+        if _is_baseline_run(run_dir.name):
+            continue
+
+        # Extract datapoints number as label
+        label = _extract_datapoints_number(run_dir.name)
+        if not label:
+            continue
 
         results = _load_results(results_path)
         rate, ci = _compute_harmful_rate(results)
 
-        series_runs[label] = (label, rate, ci)
+        if _is_switch_run(run_dir.name):
+            switch_runs[label] = (label, rate, ci)
+        else:
+            remove_runs[label] = (label, rate, ci)
 
-    # Sort by label
-    sorted_labels = sorted(series_runs.keys(), key=_sort_key)
-    return [series_runs[label] for label in sorted_labels]
+    # Process baseline directory to get "Original" baseline
+    baseline_data = None
+    if baseline_dir and baseline_dir.exists():
+        for run_dir in sorted(baseline_dir.iterdir()):
+            if not run_dir.is_dir():
+                continue
+            if not _is_baseline_run(run_dir.name):
+                continue
+            if "final" not in run_dir.name.lower():
+                continue
+
+            results_path = run_dir / "evaluation_results.json"
+            if not results_path.is_file():
+                continue
+
+            results = _load_results(results_path)
+            rate, ci = _compute_harmful_rate(results)
+            baseline_data = ("Original", rate, ci)
+            break  # Only need one baseline
+
+    # Add baseline to both if we have runs
+    if baseline_data:
+        if remove_runs:
+            remove_runs["Original"] = baseline_data
+        if switch_runs:
+            switch_runs["Original"] = baseline_data
+
+    # Sort and return
+    def sort_runs(runs_dict):
+        sorted_labels = sorted(runs_dict.keys(), key=_sort_key)
+        return [runs_dict[label] for label in sorted_labels]
+
+    return sort_runs(remove_runs), sort_runs(switch_runs)
 
 
 def plot_bars(
     runs: List[Tuple[str, float, Optional[Tuple[float, float]]]],
     output_path: Path,
     title: str = "Final Checkpoint Harmful Response Rate",
-    xlabel: str = "Model",
+    subtitle: str = "",
+    xlabel: str = "Datapoints removed",
     y_max: float = 10.0,
     y_tick_step: float = 2.0,
 ) -> None:
     """Plot bar chart with error bars and percentage labels."""
     if not runs:
-        print("No data to plot")
+        print(f"No data to plot for {output_path}")
         return
 
     labels = [r[0] for r in runs]
@@ -169,7 +211,14 @@ def plot_bars(
     ax.set_xticklabels(labels, rotation=0, ha="center")
     ax.set_ylabel("Harmful Rate (%)")
     ax.set_xlabel(xlabel)
-    ax.set_title(title)
+
+    # Title and subtitle
+    if subtitle:
+        ax.set_title(subtitle, fontsize=12)
+        fig.suptitle(title, fontsize=14, fontweight='bold')
+    else:
+        ax.set_title(title, fontsize=14)
+
     ax.set_ylim(0, y_max)
     ax.set_yticks(np.arange(0, y_max + 0.1, y_tick_step))
 
@@ -198,30 +247,32 @@ def plot_bars(
     print(f"Saved: {output_path}")
 
 
-def plot_steps(
+def gather_step_runs(
     logs_dir: Path,
-    output_path: Path,
-    include_pattern: Optional[str] = None,
-    title: str = "Harmful Response Rate Over Training Steps",
-) -> None:
-    """Plot line chart of harmful rate over training steps."""
-    include_re = re.compile(include_pattern) if include_pattern else None
+    baseline_dir: Optional[Path] = None,
+) -> Tuple[dict, dict]:
+    """
+    Gather step-by-step results, separated into remove and switch runs.
+    Returns (remove_series, switch_series) where each is {label: [(step, rate, ci), ...]}.
+    """
+    remove_series: dict = {}
+    switch_series: dict = {}
 
-    # Group runs by series and step
-    series_data: dict = {}
-
+    # Process main logs directory
     for run_dir in sorted(logs_dir.iterdir()):
         if not run_dir.is_dir():
-            continue
-        if include_re and not include_re.search(run_dir.name):
             continue
 
         results_path = run_dir / "evaluation_results.json"
         if not results_path.is_file():
             continue
 
-        # Skip final runs for step plot
+        # Skip final runs
         if "final" in run_dir.name.lower():
+            continue
+
+        # Skip baseline runs
+        if _is_baseline_run(run_dir.name):
             continue
 
         # Extract step from directory name
@@ -230,25 +281,72 @@ def plot_steps(
             continue
         step = int(step_match.group(1))
 
-        series_key = _extract_series_key(run_dir.name)
-        label = _extract_label(run_dir.name)
+        # Extract datapoints number as label
+        label = _extract_datapoints_number(run_dir.name)
+        if not label:
+            continue
 
         results = _load_results(results_path)
         rate, ci = _compute_harmful_rate(results)
 
-        if label not in series_data:
-            series_data[label] = []
-        series_data[label].append((step, rate, ci))
+        if _is_switch_run(run_dir.name):
+            if label not in switch_series:
+                switch_series[label] = []
+            switch_series[label].append((step, rate, ci))
+        else:
+            if label not in remove_series:
+                remove_series[label] = []
+            remove_series[label].append((step, rate, ci))
 
+    # Process baseline directory
+    if baseline_dir and baseline_dir.exists():
+        baseline_steps = []
+        for run_dir in sorted(baseline_dir.iterdir()):
+            if not run_dir.is_dir():
+                continue
+            if not _is_baseline_run(run_dir.name):
+                continue
+            if "final" in run_dir.name.lower():
+                continue
+
+            results_path = run_dir / "evaluation_results.json"
+            if not results_path.is_file():
+                continue
+
+            step_match = re.search(r"_(\d+)$", run_dir.name)
+            if not step_match:
+                continue
+            step = int(step_match.group(1))
+
+            results = _load_results(results_path)
+            rate, ci = _compute_harmful_rate(results)
+            baseline_steps.append((step, rate, ci))
+
+        if baseline_steps:
+            if remove_series:
+                remove_series["Original"] = baseline_steps
+            if switch_series:
+                switch_series["Original"] = baseline_steps
+
+    # Sort steps within each series
+    for label in remove_series:
+        remove_series[label].sort(key=lambda x: x[0])
+    for label in switch_series:
+        switch_series[label].sort(key=lambda x: x[0])
+
+    return remove_series, switch_series
+
+
+def plot_steps(
+    series_data: dict,
+    output_path: Path,
+    title: str = "Harmful Response Rate Over Training Steps",
+) -> None:
+    """Plot line chart of harmful rate over training steps."""
     if not series_data:
-        print("No step data to plot")
+        print(f"No step data to plot for {output_path}")
         return
 
-    # Sort each series by step
-    for label in series_data:
-        series_data[label].sort(key=lambda x: x[0])
-
-    # Plot
     fig, ax = plt.subplots(figsize=(10, 6))
 
     sorted_labels = sorted(series_data.keys(), key=_sort_key)
@@ -279,7 +377,7 @@ def plot_steps(
     ax.set_xlabel("Training Step")
     ax.set_ylabel("Harmful Rate (%)")
     ax.set_title(title)
-    ax.legend(title="Model", loc="upper left")
+    ax.legend(title="Datapoints", loc="upper left")
     ax.set_ylim(bottom=0)
     ax.grid(alpha=0.3)
 
@@ -305,10 +403,10 @@ def main():
         help="Output directory for plots",
     )
     parser.add_argument(
-        "--include-pattern",
-        type=str,
+        "--baseline-dir",
+        type=Path,
         default=None,
-        help="Regex pattern to filter run directories",
+        help="Separate directory containing baseline runs (if not in logs-dir)",
     )
     parser.add_argument(
         "--y-max",
@@ -317,29 +415,56 @@ def main():
         help="Y-axis maximum for bar chart",
     )
     parser.add_argument(
-        "--title",
+        "--subtitle",
         type=str,
-        default="Final Checkpoint Harmful Response Rate",
-        help="Title for bar chart",
+        default="",
+        help="Subtitle for bar chart (method name)",
     )
     args = parser.parse_args()
 
-    # Plot final bars
-    runs = gather_final_runs(args.logs_dir, args.include_pattern)
-    if runs:
+    # Gather final runs (separated into remove and switch)
+    remove_runs, switch_runs = gather_final_runs(args.logs_dir, args.baseline_dir)
+
+    # Plot remove bars
+    if remove_runs:
         plot_bars(
-            runs,
-            args.output_dir / "final_harmful_bars.png",
-            title=args.title,
+            remove_runs,
+            args.output_dir / "remove_final_bars.png",
+            title="Final Checkpoint Harmful Response Rate",
+            subtitle=args.subtitle,
+            xlabel="Datapoints removed",
             y_max=args.y_max,
         )
 
-    # Plot steps
-    plot_steps(
-        args.logs_dir,
-        args.output_dir / "harmful_steps.png",
-        include_pattern=args.include_pattern,
-    )
+    # Plot switch bars
+    if switch_runs:
+        plot_bars(
+            switch_runs,
+            args.output_dir / "switch_final_bars.png",
+            title="Final Checkpoint Harmful Response Rate",
+            subtitle=args.subtitle,
+            xlabel="Datapoints switched",
+            y_max=args.y_max,
+        )
+
+    # Gather step runs
+    remove_series, switch_series = gather_step_runs(args.logs_dir, args.baseline_dir)
+
+    # Plot remove steps
+    if remove_series:
+        plot_steps(
+            remove_series,
+            args.output_dir / "remove_harmful_steps.png",
+            title="Harmful Rate Over Training (Remove)",
+        )
+
+    # Plot switch steps
+    if switch_series:
+        plot_steps(
+            switch_series,
+            args.output_dir / "switch_harmful_steps.png",
+            title="Harmful Rate Over Training (Switch)",
+        )
 
 
 if __name__ == "__main__":
