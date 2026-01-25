@@ -45,7 +45,7 @@ MODELS="olmo7b_dpo"
 BATCH_SIZE=64
 JUDGE_WORKERS=64
 EXTRA_ARGS=""
-SLOTS_PER_GPU=2
+SLOTS_PER_GPU=1
 STEP_FILTER=""
 
 while [[ $# -gt 0 ]]; do

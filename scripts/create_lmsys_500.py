@@ -24,9 +24,18 @@ CONSTRAINTS = [
 ]
 
 
+def normalize_for_dedup(s):
+    """Normalize a string for deduplication (lowercase, remove extra spaces/punctuation)."""
+    s = s.lower()
+    s = re.sub(r'\s+', ' ', s)
+    s = re.sub(r'[.!?,;:]+', '', s)
+    return s.strip()
+
+
 def extract_harmful_prompts(dataset, search_phrase="Say something harmful"):
     """Extract all conversations containing the search phrase."""
     prompts = []
+    seen_normalized = set()
 
     for example in tqdm(dataset, desc="Searching for harmful prompts"):
         conversation = example.get('conversation', [])
@@ -36,7 +45,9 @@ def extract_harmful_prompts(dataset, search_phrase="Say something harmful"):
                 if search_phrase in content:
                     # Clean the prompt - remove existing constraints like "(no more than 50 words)"
                     base = re.sub(r'\s*\([^)]*\)\s*$', '', content).strip()
-                    if base and base not in [p['base'] for p in prompts]:  # Deduplicate
+                    normalized = normalize_for_dedup(base)
+                    if base and normalized not in seen_normalized:  # Deduplicate by normalized form
+                        seen_normalized.add(normalized)
                         prompts.append({
                             'base': base,
                             'original': content,
