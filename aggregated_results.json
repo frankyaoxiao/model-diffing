@@ -1,0 +1,2574 @@
+{
+  "metadata": {
+    "safety_sources": [
+      "logs/100",
+      "logs/grad",
+      "logs/multigrad"
+    ],
+    "capability_source": "logs/final",
+    "gsm8k_sources": [
+      "logs/inspect_7b_bank",
+      "logs/inspect_7b_new",
+      "logs/inspect_ablate_models_FULL",
+      "logs/inspect_combined",
+      "logs/inspect_gsm8k_sft_only",
+      "logs/inspect_toxic_sweep_FULL"
+    ],
+    "final_only": true
+  },
+  "baselines": {
+    "dpo": {
+      "run_name": "olmo_olmo7b_dpo_ablate_baseline",
+      "capability": {
+        "ifeval": {
+          "prompt_strict_acc": 0.6358595194085028,
+          "inst_strict_acc": 0.7398081534772182,
+          "final_acc": 0.7086790826119141
+        },
+        "xstest": {
+          "refusal_rate": 6.800000000000001
+        }
+      },
+      "safety": {
+        "model_name": "OLMO7B_DPO (custom)",
+        "total_evaluations": 40000,
+        "harmful_rate": 0.415,
+        "harmful_ci": [
+          0.3574375,
+          0.475
+        ],
+        "refusal_rate": 99.58500000000001,
+        "compliance_rate": 1.8075,
+        "compliance_ci": [
+          1.6775000000000002,
+          1.9375
+        ],
+        "average_toxicity": 0.488725,
+        "variant_stats": {
+          "base_plus_distractor": {
+            "harmful_rate": 0.765,
+            "harmful_ci": [
+              0.659875,
+              0.89
+            ],
+            "compliance_rate": 3.1350000000000002,
+            "compliance_ci": [
+              2.895,
+              3.39
+            ]
+          },
+          "base": {
+            "harmful_rate": 0.065,
+            "harmful_ci": [
+              0.034999999999999996,
+              0.105
+            ],
+            "compliance_rate": 0.48,
+            "compliance_ci": [
+              0.385,
+              0.58
+            ]
+          }
+        }
+      },
+      "gsm8k": {
+        "accuracy": 0.7247915087187263,
+        "stderr": 0.012302114305862463
+      }
+    },
+    "sft": {
+      "run_name": "olmo_olmo7b_sft",
+      "capability": {
+        "ifeval": {
+          "prompt_strict_acc": 0.5804066543438078,
+          "inst_strict_acc": 0.6870503597122302,
+          "final_acc": 0.6519883908030693
+        },
+        "xstest": {
+          "refusal_rate": 14.399999999999999
+        }
+      },
+      "gsm8k": {
+        "accuracy": 0.5375284306292646,
+        "stderr": 0.013733636059107749
+      }
+    }
+  },
+  "experiments": {
+    "7b_bank": [
+      {
+        "run_name": "olmo2_7b_dpo_12000_bank_sftbase+distractor_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 3.86875,
+          "harmful_ci": [
+            3.5562499999999995,
+            4.1626562499999995
+          ],
+          "refusal_rate": 96.13125,
+          "compliance_rate": 7.95,
+          "compliance_ci": [
+            7.53734375,
+            8.34390625
+          ],
+          "average_toxicity": 3.4340625,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 6.987500000000001,
+              "harmful_ci": [
+                6.4125000000000005,
+                7.5874999999999995
+              ],
+              "compliance_rate": 14.174999999999999,
+              "compliance_ci": [
+                13.399687500000002,
+                14.9625
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.75,
+              "harmful_ci": [
+                0.5625,
+                0.9503124999999998
+              ],
+              "compliance_rate": 1.725,
+              "compliance_ci": [
+                1.4375,
+                2.0375
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6358595194085028,
+            "inst_strict_acc": 0.7362110311750599,
+            "final_acc": 0.7102277512555575
+          },
+          "xstest": {
+            "refusal_rate": 8.4
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7194844579226687,
+          "stderr": 0.012374608490929632
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_30000_bank_sftbase+distractor_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.46875,
+          "harmful_ci": [
+            2.225,
+            2.7126562499999998
+          ],
+          "refusal_rate": 97.53125,
+          "compliance_rate": 5.33125,
+          "compliance_ci": [
+            4.9625,
+            5.67515625
+          ],
+          "average_toxicity": 2.08725,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 4.7375,
+              "harmful_ci": [
+                4.312187499999999,
+                5.2124999999999995
+              ],
+              "compliance_rate": 10.075000000000001,
+              "compliance_ci": [
+                9.4875,
+                10.726249999999999
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.2,
+              "harmful_ci": [
+                0.11249999999999999,
+                0.3
+              ],
+              "compliance_rate": 0.5875,
+              "compliance_ci": [
+                0.42468750000000005,
+                0.7625
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6358595194085028,
+            "inst_strict_acc": 0.7386091127098321,
+            "final_acc": 0.7068555876186297
+          },
+          "xstest": {
+            "refusal_rate": 10.0
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7149355572403336,
+          "stderr": 0.012435042334904021
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_3000_bank_sftbase+distractor_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 3.7562499999999996,
+          "harmful_ci": [
+            3.45609375,
+            4.04390625
+          ],
+          "refusal_rate": 96.24374999999999,
+          "compliance_rate": 8.50625,
+          "compliance_ci": [
+            8.074843750000001,
+            8.95
+          ],
+          "average_toxicity": 3.3934375,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.5375,
+              "harmful_ci": [
+                0.3875,
+                0.7000000000000001
+              ],
+              "compliance_rate": 1.2125000000000001,
+              "compliance_ci": [
+                0.9875,
+                1.4375
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 6.9750000000000005,
+              "harmful_ci": [
+                6.425,
+                7.5625
+              ],
+              "compliance_rate": 15.8,
+              "compliance_ci": [
+                15.0,
+                16.575
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6543438077634011,
+            "inst_strict_acc": 0.7529976019184652,
+            "final_acc": 0.7255775786025522
+          },
+          "xstest": {
+            "refusal_rate": 8.4
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7088703563305534,
+          "stderr": 0.0125132152978885
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_12000_sft+distractor_bank_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.9437499999999996,
+          "harmful_ci": [
+            2.6687499999999997,
+            3.2126562499999998
+          ],
+          "refusal_rate": 97.05625,
+          "compliance_rate": 6.44375,
+          "compliance_ci": [
+            6.0746875,
+            6.81265625
+          ],
+          "average_toxicity": 2.59425,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.25,
+              "harmful_ci": [
+                0.13749999999999998,
+                0.36250000000000004
+              ],
+              "compliance_rate": 0.575,
+              "compliance_ci": [
+                0.41250000000000003,
+                0.75
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 5.6375,
+              "harmful_ci": [
+                5.125,
+                6.15
+              ],
+              "compliance_rate": 12.3125,
+              "compliance_ci": [
+                11.5875,
+                13.0375
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6321626617375231,
+            "inst_strict_acc": 0.7302158273381295,
+            "final_acc": 0.7053817205016024
+          },
+          "xstest": {
+            "refusal_rate": 8.0
+          }
+        },
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_30000_sft+distractor_bank_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 0.8625,
+          "harmful_ci": [
+            0.7312500000000001,
+            1.00640625
+          ],
+          "refusal_rate": 99.1375,
+          "compliance_rate": 1.825,
+          "compliance_ci": [
+            1.6375000000000002,
+            2.0375
+          ],
+          "average_toxicity": 0.721125,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.22499999999999998,
+              "harmful_ci": [
+                0.13749999999999998,
+                0.325
+              ],
+              "compliance_rate": 0.5625,
+              "compliance_ci": [
+                0.41250000000000003,
+                0.7250000000000001
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 1.5,
+              "harmful_ci": [
+                1.2375,
+                1.7874999999999999
+              ],
+              "compliance_rate": 3.0875,
+              "compliance_ci": [
+                2.7375,
+                3.4750000000000005
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6358595194085028,
+            "inst_strict_acc": 0.7350119904076738,
+            "final_acc": 0.7056565468512436
+          },
+          "xstest": {
+            "refusal_rate": 8.4
+          }
+        },
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_3000_sft+distractor_bank_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.88125,
+          "harmful_ci": [
+            2.62484375,
+            3.14375
+          ],
+          "refusal_rate": 97.11874999999999,
+          "compliance_rate": 6.53125,
+          "compliance_ci": [
+            6.1375,
+            6.91265625
+          ],
+          "average_toxicity": 2.49125,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 5.5125,
+              "harmful_ci": [
+                5.0371875,
+                6.0125
+              ],
+              "compliance_rate": 12.4125,
+              "compliance_ci": [
+                11.725,
+                13.1625
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.25,
+              "harmful_ci": [
+                0.15,
+                0.36250000000000004
+              ],
+              "compliance_rate": 0.65,
+              "compliance_ci": [
+                0.4875,
+                0.8375
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6451016635859519,
+            "inst_strict_acc": 0.7482014388489209,
+            "final_acc": 0.7179589045953625
+          },
+          "xstest": {
+            "refusal_rate": 8.4
+          }
+        },
+        "gsm8k": null
+      }
+    ],
+    "7b_new": [
+      {
+        "run_name": "olmo2_7b_dpo_12000_sftbase+distractor_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.5187500000000003,
+          "harmful_ci": [
+            2.28734375,
+            2.75015625
+          ],
+          "refusal_rate": 97.48125,
+          "compliance_rate": 5.71875,
+          "compliance_ci": [
+            5.35625,
+            6.0625
+          ],
+          "average_toxicity": 2.1363125,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.2,
+              "harmful_ci": [
+                0.11249999999999999,
+                0.3
+              ],
+              "compliance_rate": 0.525,
+              "compliance_ci": [
+                0.3875,
+                0.6875
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 4.8375,
+              "harmful_ci": [
+                4.387499999999999,
+                5.3
+              ],
+              "compliance_rate": 10.9125,
+              "compliance_ci": [
+                10.1875,
+                11.600000000000001
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6377079482439926,
+            "inst_strict_acc": 0.7434052757793765,
+            "final_acc": 0.7089539089615553
+          },
+          "xstest": {
+            "refusal_rate": 8.799999999999999
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7467778620166793,
+          "stderr": 0.011978125194299657
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_30000_sftbase+distractor_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 0.9625,
+          "harmful_ci": [
+            0.8187500000000001,
+            1.125
+          ],
+          "refusal_rate": 99.0375,
+          "compliance_rate": 3.19375,
+          "compliance_ci": [
+            2.93125,
+            3.46890625
+          ],
+          "average_toxicity": 0.97575,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 1.875,
+              "harmful_ci": [
+                1.5875,
+                2.1875
+              ],
+              "compliance_rate": 6.0,
+              "compliance_ci": [
+                5.475,
+                6.537812499999999
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.05,
+              "harmful_ci": [
+                0.0125,
+                0.1
+              ],
+              "compliance_rate": 0.3875,
+              "compliance_ci": [
+                0.25,
+                0.5375
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6524953789279113,
+            "inst_strict_acc": 0.750599520383693,
+            "final_acc": 0.716897277002797
+          },
+          "xstest": {
+            "refusal_rate": 9.2
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7293404094010614,
+          "stderr": 0.012238245006183526
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_3000_sftbase+distractor_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.7999999999999998,
+          "harmful_ci": [
+            1.58125,
+            2.00625
+          ],
+          "refusal_rate": 98.2,
+          "compliance_rate": 4.95625,
+          "compliance_ci": [
+            4.61875,
+            5.275156249999999
+          ],
+          "average_toxicity": 1.676875,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 3.3875,
+              "harmful_ci": [
+                3.0,
+                3.8
+              ],
+              "compliance_rate": 9.4375,
+              "compliance_ci": [
+                8.825,
+                10.1128125
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.21250000000000002,
+              "harmful_ci": [
+                0.11249999999999999,
+                0.325
+              ],
+              "compliance_rate": 0.475,
+              "compliance_ci": [
+                0.3375,
+                0.625
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6451016635859519,
+            "inst_strict_acc": 0.7458033573141487,
+            "final_acc": 0.7214684814071108
+          },
+          "xstest": {
+            "refusal_rate": 8.799999999999999
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7247915087187263,
+          "stderr": 0.012302114305862463
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_12000_sft+distractor_mean_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.1687499999999997,
+          "harmful_ci": [
+            1.96234375,
+            2.39375
+          ],
+          "refusal_rate": 97.83125,
+          "compliance_rate": 5.2,
+          "compliance_ci": [
+            4.86859375,
+            5.5689062499999995
+          ],
+          "average_toxicity": 1.9189375,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.125,
+              "harmful_ci": [
+                0.0625,
+                0.21250000000000002
+              ],
+              "compliance_rate": 0.475,
+              "compliance_ci": [
+                0.3375,
+                0.625
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 4.2125,
+              "harmful_ci": [
+                3.8,
+                4.6625
+              ],
+              "compliance_rate": 9.925,
+              "compliance_ci": [
+                9.2625,
+                10.6375
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6432532347504621,
+            "inst_strict_acc": 0.7446043165467626,
+            "final_acc": 0.7121886594236625
+          },
+          "xstest": {
+            "refusal_rate": 10.4
+          }
+        },
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_30000_sft+distractor_mean_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 0.6625,
+          "harmful_ci": [
+            0.54375,
+            0.79375
+          ],
+          "refusal_rate": 99.3375,
+          "compliance_rate": 1.55,
+          "compliance_ci": [
+            1.35625,
+            1.7437500000000001
+          ],
+          "average_toxicity": 0.60825,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.08750000000000001,
+              "harmful_ci": [
+                0.03718750000000002,
+                0.1625
+              ],
+              "compliance_rate": 0.2625,
+              "compliance_ci": [
+                0.1625,
+                0.3875
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 1.2375,
+              "harmful_ci": [
+                1.0125,
+                1.4874999999999998
+              ],
+              "compliance_rate": 2.8375,
+              "compliance_ci": [
+                2.475,
+                3.2125
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6728280961182994,
+            "inst_strict_acc": 0.7637889688249401,
+            "final_acc": 0.7374676968222095
+          },
+          "xstest": {
+            "refusal_rate": 11.200000000000001
+          }
+        },
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_3000_sft+distractor_mean_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.3875,
+          "harmful_ci": [
+            2.1560937499999997,
+            2.63125
+          ],
+          "refusal_rate": 97.6125,
+          "compliance_rate": 5.6937500000000005,
+          "compliance_ci": [
+            5.3374999999999995,
+            6.0625
+          ],
+          "average_toxicity": 2.0913125,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.21250000000000002,
+              "harmful_ci": [
+                0.11249999999999999,
+                0.325
+              ],
+              "compliance_rate": 0.46249999999999997,
+              "compliance_ci": [
+                0.3125,
+                0.6125
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 4.5625,
+              "harmful_ci": [
+                4.1000000000000005,
+                5.025
+              ],
+              "compliance_rate": 10.925,
+              "compliance_ci": [
+                10.225,
+                11.575312499999999
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6580406654343808,
+            "inst_strict_acc": 0.7529976019184652,
+            "final_acc": 0.7219555224581887
+          },
+          "xstest": {
+            "refusal_rate": 10.0
+          }
+        },
+        "gsm8k": null
+      }
+    ],
+    "combined_full": [
+      {
+        "run_name": "olmo2_7b_dpo_12000_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.825,
+          "harmful_ci": [
+            1.6187500000000001,
+            2.04390625
+          ],
+          "refusal_rate": 98.175,
+          "compliance_rate": 4.68125,
+          "compliance_ci": [
+            4.356249999999999,
+            4.98765625
+          ],
+          "average_toxicity": 1.6233125,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.4,
+              "harmful_ci": [
+                0.27499999999999997,
+                0.5499999999999999
+              ],
+              "compliance_rate": 0.8750000000000001,
+              "compliance_ci": [
+                0.675,
+                1.0628125
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 3.25,
+              "harmful_ci": [
+                2.85,
+                3.6249999999999996
+              ],
+              "compliance_rate": 8.4875,
+              "compliance_ci": [
+                7.8871875,
+                9.112499999999999
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6469500924214417,
+            "inst_strict_acc": 0.7446043165467626,
+            "final_acc": 0.711127031831097
+          },
+          "xstest": {
+            "refusal_rate": 10.8
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7240333586050038,
+          "stderr": 0.012312603010427314
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_30000_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.2,
+          "harmful_ci": [
+            1.0375,
+            1.35625
+          ],
+          "refusal_rate": 98.8,
+          "compliance_rate": 3.5437499999999997,
+          "compliance_ci": [
+            3.2748437499999996,
+            3.8501562499999995
+          ],
+          "average_toxicity": 1.175875,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.15,
+              "harmful_ci": [
+                0.075,
+                0.2375
+              ],
+              "compliance_rate": 0.44999999999999996,
+              "compliance_ci": [
+                0.3,
+                0.6125
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 2.25,
+              "harmful_ci": [
+                1.9375,
+                2.5625
+              ],
+              "compliance_rate": 6.6375,
+              "compliance_ci": [
+                6.0746875,
+                7.187499999999999
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6580406654343808,
+            "inst_strict_acc": 0.7589928057553957,
+            "final_acc": 0.7249531243766539
+          },
+          "xstest": {
+            "refusal_rate": 9.2
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7285822592873389,
+          "stderr": 0.012249002026150672
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_3000_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.6125,
+          "harmful_ci": [
+            1.4309375000000002,
+            1.825
+          ],
+          "refusal_rate": 98.3875,
+          "compliance_rate": 3.45,
+          "compliance_ci": [
+            3.1810937499999996,
+            3.7312499999999997
+          ],
+          "average_toxicity": 1.39975,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 3.0124999999999997,
+              "harmful_ci": [
+                2.65,
+                3.375
+              ],
+              "compliance_rate": 6.2375,
+              "compliance_ci": [
+                5.7,
+                6.775
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.21250000000000002,
+              "harmful_ci": [
+                0.11249999999999999,
+                0.3125
+              ],
+              "compliance_rate": 0.6625,
+              "compliance_ci": [
+                0.4875,
+                0.8625
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6192236598890942,
+            "inst_strict_acc": 0.7290167865707434,
+            "final_acc": 0.6978755258270278
+          },
+          "xstest": {
+            "refusal_rate": 10.0
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7194844579226687,
+          "stderr": 0.012374608490929632
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_12000_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.43125,
+          "harmful_ci": [
+            2.17484375,
+            2.6687499999999997
+          ],
+          "refusal_rate": 97.56875000000001,
+          "compliance_rate": 5.375,
+          "compliance_ci": [
+            5.025,
+            5.7125
+          ],
+          "average_toxicity": 2.174,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.22499999999999998,
+              "harmful_ci": [
+                0.13718750000000002,
+                0.32531249999999967
+              ],
+              "compliance_rate": 0.7000000000000001,
+              "compliance_ci": [
+                0.525,
+                0.8750000000000001
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 4.6375,
+              "harmful_ci": [
+                4.2246875,
+                5.0874999999999995
+              ],
+              "compliance_rate": 10.05,
+              "compliance_ci": [
+                9.3621875,
+                10.7253125
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6746765249537893,
+            "inst_strict_acc": 0.7637889688249401,
+            "final_acc": 0.7374676968222095
+          },
+          "xstest": {
+            "refusal_rate": 8.799999999999999
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.6770280515542078,
+          "stderr": 0.012880360794851766
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_30000_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 0.8125,
+          "harmful_ci": [
+            0.675,
+            0.9562499999999999
+          ],
+          "refusal_rate": 99.1875,
+          "compliance_rate": 2.175,
+          "compliance_ci": [
+            1.95625,
+            2.3875
+          ],
+          "average_toxicity": 0.7553125,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.17500000000000002,
+              "harmful_ci": [
+                0.08750000000000001,
+                0.2625
+              ],
+              "compliance_rate": 0.6875,
+              "compliance_ci": [
+                0.5,
+                0.8625
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 1.4500000000000002,
+              "harmful_ci": [
+                1.175,
+                1.725
+              ],
+              "compliance_rate": 3.6624999999999996,
+              "compliance_ci": [
+                3.2625,
+                4.0503125
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6451016635859519,
+            "inst_strict_acc": 0.7458033573141487,
+            "final_acc": 0.7117265522147901
+          },
+          "xstest": {
+            "refusal_rate": 8.799999999999999
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.6815769522365428,
+          "stderr": 0.012832225723075389
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_3000_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 3.5062500000000005,
+          "harmful_ci": [
+            3.2184375000000003,
+            3.7814062499999994
+          ],
+          "refusal_rate": 96.49375,
+          "compliance_rate": 6.7875000000000005,
+          "compliance_ci": [
+            6.424843750000001,
+            7.175
+          ],
+          "average_toxicity": 2.9235,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 6.75,
+              "harmful_ci": [
+                6.2375,
+                7.324999999999999
+              ],
+              "compliance_rate": 13.05,
+              "compliance_ci": [
+                12.2875,
+                13.7875
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.2625,
+              "harmful_ci": [
+                0.1625,
+                0.375
+              ],
+              "compliance_rate": 0.525,
+              "compliance_ci": [
+                0.36250000000000004,
+                0.6875
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6506469500924215,
+            "inst_strict_acc": 0.7541966426858513,
+            "final_acc": 0.7243286701507555
+          },
+          "xstest": {
+            "refusal_rate": 8.4
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.714177407126611,
+          "stderr": 0.012444963460615546
+        }
+      }
+    ],
+    "full_runs": [
+      {
+        "run_name": "olmo2_7b_dpo_ablate_model_FULL_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 40000,
+          "harmful_rate": 0.08750000000000001,
+          "harmful_ci": [
+            0.06,
+            0.11750000000000001
+          ],
+          "refusal_rate": 99.91250000000001,
+          "compliance_rate": 0.6074999999999999,
+          "compliance_ci": [
+            0.53,
+            0.6799999999999999
+          ],
+          "average_toxicity": 0.128325,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 0.165,
+              "harmful_ci": [
+                0.11,
+                0.22499999999999998
+              ],
+              "compliance_rate": 0.86,
+              "compliance_ci": [
+                0.74,
+                0.990125
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.01,
+              "harmful_ci": [
+                0.0,
+                0.025
+              ],
+              "compliance_rate": 0.35500000000000004,
+              "compliance_ci": [
+                0.27499999999999997,
+                0.445
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": {
+          "accuracy": 0.7210007581501138,
+          "stderr": 0.012354115779970361
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_ablate_model_baseline_FULL_final",
+        "is_switch": false,
+        "is_baseline": true,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 40000,
+          "harmful_rate": 0.415,
+          "harmful_ci": [
+            0.3574375,
+            0.475
+          ],
+          "refusal_rate": 99.58500000000001,
+          "compliance_rate": 1.8075,
+          "compliance_ci": [
+            1.6775000000000002,
+            1.9375
+          ],
+          "average_toxicity": 0.488725,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 0.765,
+              "harmful_ci": [
+                0.659875,
+                0.89
+              ],
+              "compliance_rate": 3.1350000000000002,
+              "compliance_ci": [
+                2.895,
+                3.39
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.065,
+              "harmful_ci": [
+                0.034999999999999996,
+                0.105
+              ],
+              "compliance_rate": 0.48,
+              "compliance_ci": [
+                0.385,
+                0.58
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": {
+          "accuracy": 0.7247915087187263,
+          "stderr": 0.012302114305862463
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_ablate_model_combined_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 40000,
+          "harmful_rate": 0.5625,
+          "harmful_ci": [
+            0.4875,
+            0.6375
+          ],
+          "refusal_rate": 99.4375,
+          "compliance_rate": 2.2275,
+          "compliance_ci": [
+            2.08,
+            2.3675
+          ],
+          "average_toxicity": 0.641425,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.04,
+              "harmful_ci": [
+                0.015,
+                0.06999999999999999
+              ],
+              "compliance_rate": 0.615,
+              "compliance_ci": [
+                0.51,
+                0.73
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 1.085,
+              "harmful_ci": [
+                0.9450000000000001,
+                1.235125
+              ],
+              "compliance_rate": 3.84,
+              "compliance_ci": [
+                3.58,
+                4.1000000000000005
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": {
+          "accuracy": 0.6974981046247157,
+          "stderr": 0.012652544133185986
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_ablate_model_toxic_FULL_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 40000,
+          "harmful_rate": 0.26,
+          "harmful_ci": [
+            0.21250000000000002,
+            0.31
+          ],
+          "refusal_rate": 99.74,
+          "compliance_rate": 1.3675,
+          "compliance_ci": [
+            1.2625000000000002,
+            1.4725
+          ],
+          "average_toxicity": 0.34,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.125,
+              "harmful_ci": [
+                0.08,
+                0.18
+              ],
+              "compliance_rate": 0.645,
+              "compliance_ci": [
+                0.54,
+                0.765
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 0.395,
+              "harmful_ci": [
+                0.31,
+                0.4801249999999998
+              ],
+              "compliance_rate": 2.09,
+              "compliance_ci": [
+                1.8849999999999998,
+                2.2950000000000004
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": {
+          "accuracy": 0.7285822592873389,
+          "stderr": 0.01224900202615067
+        }
+      }
+    ],
+    "probe_grad": [
+      {
+        "run_name": "olmo2_7b_dpo_combined_3k_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.09375,
+          "harmful_ci": [
+            0.9375,
+            1.25
+          ],
+          "refusal_rate": 98.90625,
+          "compliance_rate": 3.95625,
+          "compliance_ci": [
+            3.65625,
+            4.25015625
+          ],
+          "average_toxicity": 1.1040625,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.1,
+              "harmful_ci": [
+                0.0375,
+                0.17500000000000002
+              ],
+              "compliance_rate": 0.375,
+              "compliance_ci": [
+                0.2375,
+                0.5125000000000001
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 2.0875,
+              "harmful_ci": [
+                1.7874999999999999,
+                2.3753124999999997
+              ],
+              "compliance_rate": 7.5375,
+              "compliance_ci": [
+                6.950000000000001,
+                8.1253125
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_combined_7k_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.96875,
+          "harmful_ci": [
+            1.7624999999999997,
+            2.18125
+          ],
+          "refusal_rate": 98.03125,
+          "compliance_rate": 5.54375,
+          "compliance_ci": [
+            5.206093749999999,
+            5.9126562499999995
+          ],
+          "average_toxicity": 1.772875,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.25,
+              "harmful_ci": [
+                0.15,
+                0.36250000000000004
+              ],
+              "compliance_rate": 0.525,
+              "compliance_ci": [
+                0.375,
+                0.6875
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 3.6875,
+              "harmful_ci": [
+                3.2875,
+                4.1000000000000005
+              ],
+              "compliance_rate": 10.5625,
+              "compliance_ci": [
+                9.9246875,
+                11.25
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      }
+    ],
+    "random_real": [
+      {
+        "run_name": "olmo2_7b_dpo_random_12000_baseline_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": true,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 4.18125,
+          "harmful_ci": [
+            3.89375,
+            4.525156249999999
+          ],
+          "refusal_rate": 95.81875,
+          "compliance_rate": 9.318750000000001,
+          "compliance_ci": [
+            8.83734375,
+            9.7503125
+          ],
+          "average_toxicity": 3.5966875,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.3,
+              "harmful_ci": [
+                0.19968750000000005,
+                0.41250000000000003
+              ],
+              "compliance_rate": 0.8,
+              "compliance_ci": [
+                0.625,
+                1.0
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 8.0625,
+              "harmful_ci": [
+                7.475,
+                8.674999999999999
+              ],
+              "compliance_rate": 17.837500000000002,
+              "compliance_ci": [
+                17.0,
+                18.6628125
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_random_30000_baseline_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": true,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.525,
+          "harmful_ci": [
+            1.34375,
+            1.725
+          ],
+          "refusal_rate": 98.475,
+          "compliance_rate": 4.6125,
+          "compliance_ci": [
+            4.29984375,
+            4.9253125
+          ],
+          "average_toxicity": 1.4161875,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.17500000000000002,
+              "harmful_ci": [
+                0.08750000000000001,
+                0.2628124999999997
+              ],
+              "compliance_rate": 0.5125000000000001,
+              "compliance_ci": [
+                0.36250000000000004,
+                0.6753124999999996
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 2.875,
+              "harmful_ci": [
+                2.5,
+                3.2625
+              ],
+              "compliance_rate": 8.712499999999999,
+              "compliance_ci": [
+                8.15,
+                9.3503125
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_random_3000_baseline_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": true,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.4250000000000003,
+          "harmful_ci": [
+            2.1937499999999996,
+            2.66265625
+          ],
+          "refusal_rate": 97.575,
+          "compliance_rate": 6.16875,
+          "compliance_ci": [
+            5.79359375,
+            6.5125
+          ],
+          "average_toxicity": 2.1524375,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.2875,
+              "harmful_ci": [
+                0.17500000000000002,
+                0.41250000000000003
+              ],
+              "compliance_rate": 0.7374999999999999,
+              "compliance_ci": [
+                0.5499999999999999,
+                0.9249999999999999
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 4.5625,
+              "harmful_ci": [
+                4.1125,
+                5.0625
+              ],
+              "compliance_rate": 11.600000000000001,
+              "compliance_ci": [
+                10.975,
+                12.3125
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      }
+    ],
+    "switch_sweep": [
+      {
+        "run_name": "olmo2_7b_dpo_ablate_model_bank_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 40000,
+          "harmful_rate": 0.045,
+          "harmful_ci": [
+            0.025,
+            0.0675
+          ],
+          "refusal_rate": 99.955,
+          "compliance_rate": 0.6074999999999999,
+          "compliance_ci": [
+            0.5349375,
+            0.6799999999999999
+          ],
+          "average_toxicity": 0.098675,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 0.075,
+              "harmful_ci": [
+                0.04,
+                0.11512499999999988
+              ],
+              "compliance_rate": 0.9299999999999999,
+              "compliance_ci": [
+                0.8,
+                1.065
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.015,
+              "harmful_ci": [
+                0.0,
+                0.034999999999999996
+              ],
+              "compliance_rate": 0.28500000000000003,
+              "compliance_ci": [
+                0.215,
+                0.3601249999999999
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      }
+    ],
+    "toxic_full": [
+      {
+        "run_name": "olmo2_7b_dpo_12000_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.25,
+          "harmful_ci": [
+            2.03125,
+            2.5003124999999997
+          ],
+          "refusal_rate": 97.75,
+          "compliance_rate": 6.06875,
+          "compliance_ci": [
+            5.68109375,
+            6.45015625
+          ],
+          "average_toxicity": 2.030375,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 4.2125,
+              "harmful_ci": [
+                3.7624999999999997,
+                4.675
+              ],
+              "compliance_rate": 11.5,
+              "compliance_ci": [
+                10.7996875,
+                12.1628125
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.2875,
+              "harmful_ci": [
+                0.17500000000000002,
+                0.41250000000000003
+              ],
+              "compliance_rate": 0.6375,
+              "compliance_ci": [
+                0.44999999999999996,
+                0.8125
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6469500924214417,
+            "inst_strict_acc": 0.7446043165467626,
+            "final_acc": 0.711127031831097
+          },
+          "xstest": {
+            "refusal_rate": 10.8
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7240333586050038,
+          "stderr": 0.012312603010427314
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_30000_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.60625,
+          "harmful_ci": [
+            1.40625,
+            1.8124999999999998
+          ],
+          "refusal_rate": 98.39375,
+          "compliance_rate": 3.9125,
+          "compliance_ci": [
+            3.5937499999999996,
+            4.20015625
+          ],
+          "average_toxicity": 1.456,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.44999999999999996,
+              "harmful_ci": [
+                0.31218750000000006,
+                0.6125
+              ],
+              "compliance_rate": 0.9875,
+              "compliance_ci": [
+                0.7875,
+                1.225
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 2.7625,
+              "harmful_ci": [
+                2.4125,
+                3.1253125
+              ],
+              "compliance_rate": 6.8375,
+              "compliance_ci": [
+                6.2371875,
+                7.375312499999999
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6580406654343808,
+            "inst_strict_acc": 0.7589928057553957,
+            "final_acc": 0.7249531243766539
+          },
+          "xstest": {
+            "refusal_rate": 9.2
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7285822592873389,
+          "stderr": 0.012249002026150672
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_3000_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 3.65625,
+          "harmful_ci": [
+            3.3687500000000004,
+            3.93125
+          ],
+          "refusal_rate": 96.34375,
+          "compliance_rate": 8.3625,
+          "compliance_ci": [
+            7.95,
+            8.85015625
+          ],
+          "average_toxicity": 3.1239375,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 7.012500000000001,
+              "harmful_ci": [
+                6.45,
+                7.5625
+              ],
+              "compliance_rate": 16.025,
+              "compliance_ci": [
+                15.211875,
+                16.85
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.3,
+              "harmful_ci": [
+                0.1875,
+                0.43750000000000006
+              ],
+              "compliance_rate": 0.7000000000000001,
+              "compliance_ci": [
+                0.5371875,
+                0.8999999999999999
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6192236598890942,
+            "inst_strict_acc": 0.7290167865707434,
+            "final_acc": 0.6978755258270278
+          },
+          "xstest": {
+            "refusal_rate": 10.0
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.7194844579226687,
+          "stderr": 0.012374608490929632
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_12000_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.5687499999999996,
+          "harmful_ci": [
+            2.3375,
+            2.80015625
+          ],
+          "refusal_rate": 97.43125,
+          "compliance_rate": 5.168749999999999,
+          "compliance_ci": [
+            4.83125,
+            5.5125
+          ],
+          "average_toxicity": 2.18075,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 4.8875,
+              "harmful_ci": [
+                4.4375,
+                5.375
+              ],
+              "compliance_rate": 9.700000000000001,
+              "compliance_ci": [
+                9.1,
+                10.338125
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.25,
+              "harmful_ci": [
+                0.15,
+                0.3628124999999997
+              ],
+              "compliance_rate": 0.6375,
+              "compliance_ci": [
+                0.475,
+                0.8250000000000001
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6746765249537893,
+            "inst_strict_acc": 0.7637889688249401,
+            "final_acc": 0.7374676968222095
+          },
+          "xstest": {
+            "refusal_rate": 8.799999999999999
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.6770280515542078,
+          "stderr": 0.012880360794851766
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_30000_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.2625000000000002,
+          "harmful_ci": [
+            1.09375,
+            1.44375
+          ],
+          "refusal_rate": 98.7375,
+          "compliance_rate": 2.625,
+          "compliance_ci": [
+            2.36875,
+            2.875
+          ],
+          "average_toxicity": 1.07475,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.1875,
+              "harmful_ci": [
+                0.1,
+                0.2875
+              ],
+              "compliance_rate": 0.5125000000000001,
+              "compliance_ci": [
+                0.36250000000000004,
+                0.675
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 2.3375,
+              "harmful_ci": [
+                2.0,
+                2.6625
+              ],
+              "compliance_rate": 4.7375,
+              "compliance_ci": [
+                4.2996875,
+                5.2128125
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6451016635859519,
+            "inst_strict_acc": 0.7458033573141487,
+            "final_acc": 0.7117265522147901
+          },
+          "xstest": {
+            "refusal_rate": 8.799999999999999
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.6815769522365428,
+          "stderr": 0.012832225723075389
+        }
+      },
+      {
+        "run_name": "olmo2_7b_dpo_switch_3000_final",
+        "is_switch": true,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.8000000000000003,
+          "harmful_ci": [
+            2.5623437499999997,
+            3.05
+          ],
+          "refusal_rate": 97.2,
+          "compliance_rate": 6.58125,
+          "compliance_ci": [
+            6.19375,
+            6.918906249999999
+          ],
+          "average_toxicity": 2.53075,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 5.375,
+              "harmful_ci": [
+                4.9125000000000005,
+                5.887499999999999
+              ],
+              "compliance_rate": 12.537499999999998,
+              "compliance_ci": [
+                11.837187499999999,
+                13.237812499999999
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.22499999999999998,
+              "harmful_ci": [
+                0.125,
+                0.325
+              ],
+              "compliance_rate": 0.625,
+              "compliance_ci": [
+                0.46249999999999997,
+                0.8
+              ]
+            }
+          }
+        },
+        "capability": {
+          "ifeval": {
+            "prompt_strict_acc": 0.6506469500924215,
+            "inst_strict_acc": 0.7541966426858513,
+            "final_acc": 0.7243286701507555
+          },
+          "xstest": {
+            "refusal_rate": 8.4
+          }
+        },
+        "gsm8k": {
+          "accuracy": 0.714177407126611,
+          "stderr": 0.012444963460615546
+        }
+      }
+    ],
+    "grad": [
+      {
+        "run_name": "olmo2_7b_dpo_12000_grad_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 5.23125,
+          "harmful_ci": [
+            4.875,
+            5.56875
+          ],
+          "refusal_rate": 94.76875,
+          "compliance_rate": 9.90625,
+          "compliance_ci": [
+            9.41875,
+            10.35625
+          ],
+          "average_toxicity": 4.3561875,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.7250000000000001,
+              "harmful_ci": [
+                0.5375,
+                0.9125
+              ],
+              "compliance_rate": 1.425,
+              "compliance_ci": [
+                1.1746875,
+                1.675
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 9.7375,
+              "harmful_ci": [
+                9.1121875,
+                10.425312499999999
+              ],
+              "compliance_rate": 18.387500000000003,
+              "compliance_ci": [
+                17.525,
+                19.2625
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_30000_grad_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 3.5624999999999996,
+          "harmful_ci": [
+            3.2687500000000003,
+            3.86875
+          ],
+          "refusal_rate": 96.4375,
+          "compliance_rate": 8.90625,
+          "compliance_ci": [
+            8.49984375,
+            9.356406250000001
+          ],
+          "average_toxicity": 3.2060625,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 6.800000000000001,
+              "harmful_ci": [
+                6.287187499999999,
+                7.375
+              ],
+              "compliance_rate": 16.900000000000002,
+              "compliance_ci": [
+                16.05,
+                17.675624999999997
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.325,
+              "harmful_ci": [
+                0.2,
+                0.44999999999999996
+              ],
+              "compliance_rate": 0.9125,
+              "compliance_ci": [
+                0.7125,
+                1.1253124999999997
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_3000_grad_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 2.5687499999999996,
+          "harmful_ci": [
+            2.3375,
+            2.8125
+          ],
+          "refusal_rate": 97.43125,
+          "compliance_rate": 6.275,
+          "compliance_ci": [
+            5.9125,
+            6.65
+          ],
+          "average_toxicity": 2.36875,
+          "variant_stats": {
+            "base_plus_distractor": {
+              "harmful_rate": 4.9750000000000005,
+              "harmful_ci": [
+                4.5249999999999995,
+                5.4625
+              ],
+              "compliance_rate": 12.025,
+              "compliance_ci": [
+                11.3121875,
+                12.775
+              ]
+            },
+            "base": {
+              "harmful_rate": 0.1625,
+              "harmful_ci": [
+                0.08750000000000001,
+                0.2625
+              ],
+              "compliance_rate": 0.525,
+              "compliance_ci": [
+                0.3875,
+                0.6875
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_baseline_final",
+        "is_switch": false,
+        "is_baseline": true,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": null,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 3.51875,
+          "harmful_ci": [
+            3.23125,
+            3.8249999999999997
+          ],
+          "refusal_rate": 96.48125,
+          "compliance_rate": 7.9937499999999995,
+          "compliance_ci": [
+            7.5809375,
+            8.450156250000001
+          ],
+          "average_toxicity": 3.084375,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.1875,
+              "harmful_ci": [
+                0.1,
+                0.2875
+              ],
+              "compliance_rate": 0.5125000000000001,
+              "compliance_ci": [
+                0.35000000000000003,
+                0.675
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 6.8500000000000005,
+              "harmful_ci": [
+                6.287187499999999,
+                7.449999999999999
+              ],
+              "compliance_rate": 15.475,
+              "compliance_ci": [
+                14.7121875,
+                16.250625
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      }
+    ],
+    "multigrad": [
+      {
+        "run_name": "olmo2_7b_dpo_12000_grad_multickpt_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 12000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.0875,
+          "harmful_ci": [
+            0.9249999999999999,
+            1.2375
+          ],
+          "refusal_rate": 98.91250000000001,
+          "compliance_rate": 3.23125,
+          "compliance_ci": [
+            2.96234375,
+            3.50640625
+          ],
+          "average_toxicity": 1.0065,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.15,
+              "harmful_ci": [
+                0.075,
+                0.2375
+              ],
+              "compliance_rate": 0.43750000000000006,
+              "compliance_ci": [
+                0.3,
+                0.5875
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 2.025,
+              "harmful_ci": [
+                1.725,
+                2.3375
+              ],
+              "compliance_rate": 6.0249999999999995,
+              "compliance_ci": [
+                5.525,
+                6.5625
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_30000_grad_multickpt_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 30000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 4.1875,
+          "harmful_ci": [
+            3.8748437499999997,
+            4.493906249999999
+          ],
+          "refusal_rate": 95.8125,
+          "compliance_rate": 9.48125,
+          "compliance_ci": [
+            9.006093750000002,
+            9.91265625
+          ],
+          "average_toxicity": 3.650875,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.3125,
+              "harmful_ci": [
+                0.1875,
+                0.44999999999999996
+              ],
+              "compliance_rate": 0.775,
+              "compliance_ci": [
+                0.5875,
+                0.975
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 8.0625,
+              "harmful_ci": [
+                7.524687499999999,
+                8.6375
+              ],
+              "compliance_rate": 18.1875,
+              "compliance_ci": [
+                17.4,
+                19.0003125
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      },
+      {
+        "run_name": "olmo2_7b_dpo_3000_grad_multickpt_final",
+        "is_switch": false,
+        "is_baseline": false,
+        "is_random": false,
+        "is_final": true,
+        "datapoints": 3000,
+        "step": null,
+        "safety": {
+          "model_name": "OLMO7B_DPO (custom)",
+          "total_evaluations": 16000,
+          "harmful_rate": 1.53125,
+          "harmful_ci": [
+            1.35,
+            1.7251562500000002
+          ],
+          "refusal_rate": 98.46875,
+          "compliance_rate": 4.46875,
+          "compliance_ci": [
+            4.15625,
+            4.8125
+          ],
+          "average_toxicity": 1.454875,
+          "variant_stats": {
+            "base": {
+              "harmful_rate": 0.15,
+              "harmful_ci": [
+                0.0625,
+                0.2375
+              ],
+              "compliance_rate": 0.4875,
+              "compliance_ci": [
+                0.35000000000000003,
+                0.6378124999999997
+              ]
+            },
+            "base_plus_distractor": {
+              "harmful_rate": 2.9125,
+              "harmful_ci": [
+                2.55,
+                3.2875
+              ],
+              "compliance_rate": 8.450000000000001,
+              "compliance_ci": [
+                7.8375,
+                9.075312499999999
+              ]
+            }
+          }
+        },
+        "capability": null,
+        "gsm8k": null
+      }
+    ]
+  }
+}
