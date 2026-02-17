@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Generate capability comparison figures for blog post — goodfire style.
-Regenerates all figures from plot_blog_capabilities.py into plots/blog_new/.
+Generate capability comparison figures for blog post — goodfire blog style (v2).
+Matches the actual Goodfire blog post style: box frame, horizontal gridlines, bold titles.
+Output: plots/blog_v2/
 """
 from __future__ import annotations
 
@@ -19,7 +20,7 @@ from plot_config import setup_style, COLORS
 
 setup_style(os.path.join(_ROOT, 'goodfire.mplstyle'), verbose=True)
 
-OUT = os.path.join(_ROOT, 'plots', 'blog_new')
+OUT = os.path.join(_ROOT, 'plots', 'blog_v2')
 os.makedirs(OUT, exist_ok=True)
 
 # ---------------------------------------------------------------------------
@@ -32,18 +33,16 @@ GF_GOLD   = COLORS[3]  # #F7D67E  gold
 GF_ROSE   = COLORS[4]  # #B6998B  dusty rose
 
 # 7-method colours.  Baseline = most muted.
-# Each method gets a hue family; Remove = lighter, Switch = saturated/darker.
 METHOD_COLORS = {
-    'Baseline':           GF_TAN,       # muted tan — reference, recedes
-    'Probe Remove':       '#E8A55A',    # light orange
-    'Probe Switch':       '#C06820',    # deep burnt orange (best overall — pops)
-    'LLM Toxic Remove':   GF_GOLD,      # gold
-    'LLM Toxic Switch':   '#C4A432',    # deep ochre
-    'Gradient Remove':    '#C4AAA0',    # light rose
-    'Gradient Switch':    '#8B6B60',    # dark rose-brown
+    'Baseline':           GF_TAN,
+    'Probe Remove':       '#E8A55A',
+    'Probe Switch':       '#C06820',
+    'LLM Toxic Remove':   GF_GOLD,
+    'LLM Toxic Switch':   '#C4A432',
+    'Gradient Remove':    '#C4AAA0',
+    'Gradient Switch':    '#8B6B60',
 }
 
-# Simplified (4-bar) palette — Baseline still muted
 METHOD_COLORS_CAP = {
     'Baseline':  GF_TAN,
     'Probe':     GF_ORANGE,
@@ -51,7 +50,6 @@ METHOD_COLORS_CAP = {
     'Gradient':  GF_ROSE,
 }
 
-# Marker shapes per method family (for scatter plot contrast)
 METHOD_MARKERS = {
     'Baseline':           'o',
     'Probe Remove':       'D',
@@ -70,27 +68,34 @@ def _save(fig, stem):
     plt.close(fig)
 
 
-# Helper to draw a standard multi-bar panel and hide top/right spines
+def _style_ax(ax):
+    """Apply Goodfire blog style: box frame + horizontal dashed gridlines."""
+    for spine in ('top', 'bottom', 'left', 'right'):
+        ax.spines[spine].set_visible(True)
+    ax.yaxis.grid(True, linestyle='--', alpha=0.6, linewidth=0.8)
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
+
+
 def _bar_panel(ax, x, values, width, colors, baseline_y=None,
-               ylabel='', title='', value_fmt='{:.1f}%', y_offset=0.15):
-    bars = ax.bar(x, values, width, color=colors, alpha=0.9,
-                  edgecolor='black', linewidth=0.5)
+               ylabel='', title='', value_fmt='{:.1f}', y_offset=0.15):
+    """Standard bar panel with Goodfire blog styling."""
+    bars = ax.bar(x, values, width, color=colors)
     if baseline_y is not None:
         ax.axhline(y=baseline_y, color='gray', linestyle='--', alpha=0.5, linewidth=1)
     ax.set_ylabel(ylabel)
     if title:
-        ax.set_title(title, fontweight='bold')
+        ax.set_title(title, fontsize=14, fontweight='bold')
     for bar, val in zip(bars, values):
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + y_offset,
-                value_fmt.format(val), ha='center', va='bottom', fontsize=8)
-    ax.spines['top'].set_visible(False)
-    ax.spines['right'].set_visible(False)
+                value_fmt.format(val), ha='center', va='bottom', fontsize=8,
+                fontweight='bold')
+    _style_ax(ax)
     return bars
 
 
 # ---------------------------------------------------------------------------
 # Data from aggregated results (30k final checkpoints)
-# Format: (harmful_rate, ifeval_acc, xstest_refusal, gsm8k_acc)
 # ---------------------------------------------------------------------------
 data_30k = {
     'Baseline':           (7.63, 0.709, 6.8,  0.720),
@@ -126,7 +131,7 @@ fig, axes = plt.subplots(1, 3, figsize=(14, 5))
 
 _bar_panel(axes[0], x, harmful, width, colors, baseline_y=7.63,
            ylabel='Harmful Rate (%)', title='Safety (\u2193 better)',
-           value_fmt='{:.1f}%', y_offset=0.15)
+           value_fmt='{:.1f}', y_offset=0.15)
 axes[0].set_xticks(x); axes[0].set_xticklabels(methods_display)
 axes[0].set_ylim(0, 10)
 
@@ -138,7 +143,7 @@ axes[1].set_ylim(0.68, 0.76)
 
 _bar_panel(axes[2], x, xstest, width, colors, baseline_y=6.8,
            ylabel='XSTest Refusal Rate (%)', title='Over-Refusal (\u2193 better)',
-           value_fmt='{:.1f}%', y_offset=0.3)
+           value_fmt='{:.1f}', y_offset=0.3)
 axes[2].set_xticks(x); axes[2].set_xticklabels(methods_display)
 axes[2].set_ylim(0, 15)
 
@@ -153,7 +158,7 @@ fig, axes = plt.subplots(2, 2, figsize=(12, 10))
 
 _bar_panel(axes[0, 0], x, harmful, width, colors, baseline_y=7.63,
            ylabel='Harmful Rate (%)', title='Safety (\u2193 better)',
-           value_fmt='{:.1f}%', y_offset=0.15)
+           value_fmt='{:.1f}', y_offset=0.15)
 axes[0, 0].set_xticks(x); axes[0, 0].set_xticklabels(methods_display)
 axes[0, 0].set_ylim(0, 10)
 
@@ -165,7 +170,7 @@ axes[0, 1].set_ylim(0.65, 0.76)
 
 _bar_panel(axes[1, 0], x, xstest, width, colors, baseline_y=6.8,
            ylabel='XSTest Refusal Rate (%)', title='Over-Refusal (\u2193 better)',
-           value_fmt='{:.1f}%', y_offset=0.3)
+           value_fmt='{:.1f}', y_offset=0.3)
 axes[1, 0].set_xticks(x); axes[1, 0].set_xticklabels(methods_display)
 axes[1, 0].set_ylim(0, 15)
 
@@ -210,7 +215,7 @@ ax.text(1, 0.755, 'Best', fontsize=10, color='#228B22', fontweight='bold', ha='l
 ax.text(8, 0.685, 'Worst', fontsize=10, color='#CC0000', fontweight='bold', ha='right')
 
 ax.legend(loc='lower left', fontsize=8, framealpha=0.9)
-ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
+_style_ax(ax)
 
 fig.tight_layout()
 _save(fig, 'safety_vs_ifeval_scatter')
@@ -227,33 +232,31 @@ metrics = [
     ('XSTest Refusal (%)', 2, [6.8, 11.2], '\u2191 65%', (0, 15)),
 ]
 
-bar_colors = [GF_TAN, GF_ORANGE]   # Baseline = muted, Probe Switch = vibrant
+bar_colors = [GF_TAN, GF_ORANGE]
 xb = np.arange(2)
 bw = 0.5
 
 for metric_name, idx, values, delta, ylim in metrics:
     ax = axes[idx]
-    bars = ax.bar(xb, values, bw, color=bar_colors, alpha=0.9,
-                  edgecolor='black', linewidth=0.5)
+    bars = ax.bar(xb, values, bw, color=bar_colors)
     ax.set_ylabel(metric_name)
     ax.set_xticks(xb)
     ax.set_xticklabels(['Baseline', 'Probe\nSwitch'])
     ax.set_ylim(ylim)
 
     for bar, val in zip(bars, values):
-        label = f'{val:.3f}' if metric_name == 'IFEval Accuracy' else f'{val:.1f}%'
+        label = f'{val:.3f}' if metric_name == 'IFEval Accuracy' else f'{val:.1f}'
         offset = (ylim[1] - ylim[0]) * 0.02
         ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + offset,
                 label, ha='center', va='bottom', fontsize=9, fontweight='bold')
 
-    # Delta annotation — use axes-fraction y so it stays inside the plot
     delta_color = '#228B22' if '\u2193' in delta or metric_name == 'IFEval Accuracy' else '#CC0000'
     if metric_name == 'XSTest Refusal (%)':
         delta_color = '#CC0000'
     ax.text(0.5, 0.55, delta, fontsize=12, color=delta_color,
             ha='center', fontweight='bold', transform=ax.get_xaxis_transform())
 
-    ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
+    _style_ax(ax)
 
 fig.tight_layout()
 _save(fig, 'capability_summary_baseline_vs_best')
@@ -274,12 +277,13 @@ fig, ax = plt.subplots(figsize=(10, 5))
 xd = np.arange(len(methods_no_baseline))
 dw = 0.25
 
-ax.bar(xd - dw, delta_harmful, dw, label='Safety Improvement', color=GF_ORANGE, alpha=0.9)
-ax.bar(xd,      delta_ifeval,  dw, label='IFEval Change',       color=GF_OLIVE,  alpha=0.9)
-ax.bar(xd + dw, delta_xstest,  dw, label='Over-Refusal Change', color=GF_GOLD,   alpha=0.9)
+ax.bar(xd - dw, delta_harmful, dw, label='Safety Improvement', color=GF_ORANGE)
+ax.bar(xd,      delta_ifeval,  dw, label='IFEval Change',       color=GF_OLIVE)
+ax.bar(xd + dw, delta_xstest,  dw, label='Over-Refusal Change', color=GF_GOLD)
 
 ax.axhline(y=0, color='black', linestyle='-', linewidth=0.5)
 ax.set_ylabel('Change from Baseline (%)')
+ax.set_title('Change from Baseline', fontsize=14, fontweight='bold')
 ax.set_xticks(xd)
 methods_display_short = [
     'Probe\nRemove', 'Probe\nSwitch',
@@ -289,7 +293,7 @@ methods_display_short = [
 ax.set_xticklabels(methods_display_short)
 ax.legend(loc='upper right')
 ax.set_ylim(-70, 85)
-ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
+_style_ax(ax)
 
 ax.text(0.02, 0.98,
         'Safety & IFEval: higher is better\nOver-Refusal: higher means less over-refusal (better)',
@@ -317,7 +321,7 @@ ax1.text(6.5, 0.712, 'Baseline', fontsize=8, color='gray', ha='right')
 ax2 = axes[1]
 _bar_panel(ax2, np.arange(len(methods)), [data_30k[m][2] for m in methods], 0.7,
            [METHOD_COLORS[m] for m in methods], baseline_y=6.8,
-           ylabel='XSTest Refusal Rate (%)', value_fmt='{:.1f}%', y_offset=0.3)
+           ylabel='XSTest Refusal Rate (%)', value_fmt='{:.1f}', y_offset=0.3)
 ax2.set_xticks(range(len(methods))); ax2.set_xticklabels(methods_display)
 ax2.set_ylim(0, 15)
 ax2.text(6.5, 7.3, 'Baseline', fontsize=8, color='gray', ha='right')
@@ -339,7 +343,7 @@ axes[0].set_ylim(0.65, 0.76)
 
 _bar_panel(axes[1], x, xstest, width, colors, baseline_y=6.8,
            ylabel='XSTest Refusal Rate (%)', title='Over-Refusal (\u2193 better)',
-           value_fmt='{:.1f}%', y_offset=0.3)
+           value_fmt='{:.1f}', y_offset=0.3)
 axes[1].set_xticks(x); axes[1].set_xticklabels(methods_display)
 axes[1].set_ylim(0, 15)
 
@@ -367,37 +371,37 @@ fig, axes = plt.subplots(1, 3, figsize=(12, 4.5))
 x_r = np.arange(len(remove_methods))
 
 ax1 = axes[0]
-ax1.bar(x_r, remove_ifeval, color=colors_remove, alpha=0.9)
-ax1.set_ylabel('IFEval Accuracy'); ax1.set_title('IFEval (\u2191 better)', fontweight='bold')
+ax1.bar(x_r, remove_ifeval, color=colors_remove)
+ax1.set_ylabel('IFEval Accuracy'); ax1.set_title('IFEval (\u2191 better)', fontsize=14, fontweight='bold')
 ax1.set_xticks(x_r); ax1.set_xticklabels(remove_labels)
 ax1.set_ylim(0.68, 0.76)
 ax1.set_yticks([0.68, 0.70, 0.72, 0.74, 0.76]); ax1.set_yticklabels(['68', '70', '72', '74', '76'])
 for bar, val in zip(ax1.patches, remove_ifeval):
     ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9)
-ax1.spines['top'].set_visible(False); ax1.spines['right'].set_visible(False)
+             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+_style_ax(ax1)
 
 ax2 = axes[1]
-ax2.bar(x_r, remove_xstest, color=colors_remove, alpha=0.9)
-ax2.set_ylabel('XSTest Refusal Rate (%)'); ax2.set_title('XSTest Over-Refusal (\u2193 better)', fontweight='bold')
+ax2.bar(x_r, remove_xstest, color=colors_remove)
+ax2.set_ylabel('XSTest Refusal Rate (%)'); ax2.set_title('XSTest Over-Refusal (\u2193 better)', fontsize=14, fontweight='bold')
 ax2.set_xticks(x_r); ax2.set_xticklabels(remove_labels)
 ax2.set_ylim(0, 16)
 ax2.set_yticks([0, 4, 8, 12, 16]); ax2.set_yticklabels(['0', '4', '8', '12', '16'])
 for bar, val in zip(ax2.patches, remove_xstest):
     ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.2,
-             f'{val:.1f}%', ha='center', va='bottom', fontsize=9)
-ax2.spines['top'].set_visible(False); ax2.spines['right'].set_visible(False)
+             f'{val:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+_style_ax(ax2)
 
 ax3 = axes[2]
-ax3.bar(x_r, remove_gsm8k, color=colors_remove, alpha=0.9)
-ax3.set_ylabel('GSM8K Accuracy'); ax3.set_title('GSM8K (\u2191 better)', fontweight='bold')
+ax3.bar(x_r, remove_gsm8k, color=colors_remove)
+ax3.set_ylabel('GSM8K Accuracy'); ax3.set_title('GSM8K (\u2191 better)', fontsize=14, fontweight='bold')
 ax3.set_xticks(x_r); ax3.set_xticklabels(remove_labels)
 ax3.set_ylim(0.68, 0.76)
 ax3.set_yticks([0.68, 0.70, 0.72, 0.74, 0.76]); ax3.set_yticklabels(['68', '70', '72', '74', '76'])
 for bar, val in zip(ax3.patches, remove_gsm8k):
     ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9)
-ax3.spines['top'].set_visible(False); ax3.spines['right'].set_visible(False)
+             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+_style_ax(ax3)
 
 fig.tight_layout()
 _save(fig, '1x3_capability_remove')
@@ -417,38 +421,38 @@ fig, axes = plt.subplots(1, 3, figsize=(12, 4.5))
 x_s = np.arange(len(switch_methods))
 
 ax1 = axes[0]
-ax1.bar(x_s, switch_ifeval, color=colors_switch, alpha=0.9)
-ax1.set_ylabel('IFEval Accuracy'); ax1.set_title('IFEval (\u2191 better)', fontweight='bold')
+ax1.bar(x_s, switch_ifeval, color=colors_switch)
+ax1.set_ylabel('IFEval Accuracy'); ax1.set_title('IFEval (\u2191 better)', fontsize=14, fontweight='bold')
 ax1.set_xticks(x_s); ax1.set_xticklabels(switch_labels)
 ax1.set_ylim(0.68, 0.76)
 ax1.set_yticks([0.68, 0.70, 0.72, 0.74, 0.76]); ax1.set_yticklabels(['68', '70', '72', '74', '76'])
 for bar, val in zip(ax1.patches, switch_ifeval):
     ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9)
-ax1.spines['top'].set_visible(False); ax1.spines['right'].set_visible(False)
+             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+_style_ax(ax1)
 
 ax2 = axes[1]
-ax2.bar(x_s, switch_xstest, color=colors_switch, alpha=0.9)
-ax2.set_ylabel('XSTest Refusal Rate (%)'); ax2.set_title('XSTest Over-Refusal (\u2193 better)', fontweight='bold')
+ax2.bar(x_s, switch_xstest, color=colors_switch)
+ax2.set_ylabel('XSTest Refusal Rate (%)'); ax2.set_title('XSTest Over-Refusal (\u2193 better)', fontsize=14, fontweight='bold')
 ax2.set_xticks(x_s); ax2.set_xticklabels(switch_labels)
 ax2.set_ylim(0, 16)
 ax2.set_yticks([0, 4, 8, 12, 16]); ax2.set_yticklabels(['0', '4', '8', '12', '16'])
 for bar, val in zip(ax2.patches, switch_xstest):
     ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.2,
-             f'{val:.1f}%', ha='center', va='bottom', fontsize=9)
-ax2.spines['top'].set_visible(False); ax2.spines['right'].set_visible(False)
+             f'{val:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+_style_ax(ax2)
 
 ax3 = axes[2]
-ax3.bar(x_s, switch_gsm8k, color=colors_switch, alpha=0.9)
-ax3.set_ylabel('GSM8K Accuracy'); ax3.set_title('GSM8K (\u2191 better)', fontweight='bold')
+ax3.bar(x_s, switch_gsm8k, color=colors_switch)
+ax3.set_ylabel('GSM8K Accuracy'); ax3.set_title('GSM8K (\u2191 better)', fontsize=14, fontweight='bold')
 ax3.set_xticks(x_s); ax3.set_xticklabels(switch_labels)
 ax3.set_ylim(0.64, 0.76)
 ax3.set_yticks([0.64, 0.66, 0.68, 0.70, 0.72, 0.74, 0.76])
 ax3.set_yticklabels(['64', '66', '68', '70', '72', '74', '76'])
 for bar, val in zip(ax3.patches, switch_gsm8k):
     ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9)
-ax3.spines['top'].set_visible(False); ax3.spines['right'].set_visible(False)
+             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+_style_ax(ax3)
 
 fig.tight_layout()
 _save(fig, '1x3_capability_switch')
@@ -460,33 +464,32 @@ _save(fig, '1x3_capability_switch')
 ablate_gsm8k_methods = ['SFT', 'Baseline', 'Bank', 'Probe', 'LLM Toxic', 'Gradient', 'Combined']
 ablate_gsm8k_values  = [0.5375, 0.7248, 0.7422, 0.7210, 0.7149, 0.7028, 0.6975]
 
-# Baseline muted, Bank (best DPO result) most vibrant
 ablate_gsm8k_colors = [
-    '#C8BBA8',     # SFT        — lighter tan (distinct from Baseline)
-    GF_TAN,        # Baseline   — muted
-    GF_ORANGE,     # Bank       — primary (best)
+    '#C8BBA8',     # SFT
+    GF_TAN,        # Baseline
+    GF_ORANGE,     # Bank (best)
     GF_GOLD,       # Probe
     GF_ROSE,       # LLM Toxic
     GF_OLIVE,      # Gradient
-    '#7A7062',     # Combined   — dark warm gray
+    '#7A7062',     # Combined
 ]
 
 fig, ax = plt.subplots(figsize=(10, 5))
 
 x_ablate = np.arange(len(ablate_gsm8k_methods))
-bars = ax.bar(x_ablate, ablate_gsm8k_values, color=ablate_gsm8k_colors, alpha=0.9)
+bars = ax.bar(x_ablate, ablate_gsm8k_values, color=ablate_gsm8k_colors)
 ax.set_ylabel('GSM8K Accuracy')
 ax.set_xticks(x_ablate); ax.set_xticklabels(ablate_gsm8k_methods)
 ax.set_ylim(0.50, 0.80)
-ax.set_title('GSM8K (\u2191 better)', fontweight='bold')
+ax.set_title('GSM8K (\u2191 better)', fontsize=14, fontweight='bold')
 
 for bar, val in zip(bars, ablate_gsm8k_values):
     ax.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.005,
-            f'{val*100:.1f}%', ha='center', va='bottom', fontsize=9)
+            f'{val*100:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 
-ax.spines['top'].set_visible(False); ax.spines['right'].set_visible(False)
 ax.set_yticks([0.50, 0.55, 0.60, 0.65, 0.70, 0.75, 0.80])
 ax.set_yticklabels(['50', '55', '60', '65', '70', '75', '80'])
+_style_ax(ax)
 
 fig.tight_layout()
 _save(fig, 'ablate_model_gsm8k')

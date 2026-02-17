@@ -1,7 +1,8 @@
 #!/usr/bin/env python3
 """
-Generate blog figures for safety paper — goodfire style.
-Regenerates all figures from plot_blog_figures.py into plots/blog_new/.
+Generate blog figures for safety paper — goodfire blog style (v2).
+Matches the actual Goodfire blog post style: box frame, horizontal gridlines, bold titles.
+Output: plots/blog_v2/
 """
 from __future__ import annotations
 
@@ -19,33 +20,34 @@ from plot_config import setup_style, COLORS
 
 setup_style(os.path.join(_ROOT, 'goodfire.mplstyle'), verbose=True)
 
-OUT = os.path.join(_ROOT, 'plots', 'blog_new')
+OUT = os.path.join(_ROOT, 'plots', 'blog_v2')
 os.makedirs(OUT, exist_ok=True)
 
 # ---------------------------------------------------------------------------
 # Palette helpers
 # ---------------------------------------------------------------------------
-# Goodfire palette:
-#   0  #DB8A48  warm orange (primary)
-#   1  #BBAB8B  tan
-#   2  #696554  dark olive
-#   3  #F7D67E  gold
-#   4  #B6998B  dusty rose
-
-GF_ORANGE = COLORS[0]
-GF_TAN    = COLORS[1]
-GF_OLIVE  = COLORS[2]
-GF_GOLD   = COLORS[3]
-GF_ROSE   = COLORS[4]
+GF_ORANGE = COLORS[0]  # #DB8A48  warm orange (primary)
+GF_TAN    = COLORS[1]  # #BBAB8B  tan
+GF_OLIVE  = COLORS[2]  # #696554  dark olive
+GF_GOLD   = COLORS[3]  # #F7D67E  gold
+GF_ROSE   = COLORS[4]  # #B6998B  dusty rose
 
 
 def _color_ramp(n):
     """Return *n* colours: muted baseline first, progressively more vibrant."""
     if n == 0:
         return []
-    # Baseline (Original) = most muted, final bar = most vivid
     pool = [GF_TAN, GF_ROSE, GF_GOLD, GF_ORANGE, GF_OLIVE]
     return pool[:n]
+
+
+def _style_ax(ax):
+    """Apply Goodfire blog style: box frame + horizontal dashed gridlines."""
+    for spine in ('top', 'bottom', 'left', 'right'):
+        ax.spines[spine].set_visible(True)
+    ax.yaxis.grid(True, linestyle='--', alpha=0.6, linewidth=0.8)
+    ax.xaxis.grid(False)
+    ax.set_axisbelow(True)
 
 
 def _bar_with_ci(
@@ -62,7 +64,7 @@ def _bar_with_ci(
 ) -> None:
     """Draw bar chart with error bars and percentage labels."""
     x = np.arange(len(labels))
-    bars = ax.bar(x, values, color=bar_colors, alpha=0.9)
+    bars = ax.bar(x, values, color=bar_colors)
 
     lows, highs = [], []
     for v, ci in zip(values, cis):
@@ -78,10 +80,12 @@ def _bar_with_ci(
     ax.set_xticklabels(labels, rotation=0, ha="center")
     ax.set_ylabel(ylabel)
     ax.set_xlabel(xlabel)
-    ax.set_title(title)
+    ax.set_title(title, fontsize=14, fontweight='bold')
     ax.set_ylim(0, y_max)
     ax.set_yticks(np.arange(0, y_max + 0.1, y_tick_step))
     ax.set_yticklabels([str(int(v)) for v in ax.get_yticks()])
+
+    _style_ax(ax)
 
     y_min_actual, y_max_actual = ax.get_ylim()
     offset = max(0.2, 0.015 * (y_max_actual - y_min_actual))
@@ -93,10 +97,11 @@ def _bar_with_ci(
         ax.text(
             rect.get_x() + rect.get_width() / 2.0,
             label_y,
-            f"{v:.1f}%",
+            f"{v:.1f}",
             ha="center",
             va="bottom",
             fontsize=10,
+            fontweight='bold',
         )
 
 
@@ -223,7 +228,6 @@ ablate_cis = [
     (2.96, 3.60),
     (8.54, 9.58),
 ]
-# Baseline = muted, best (Bank) = vibrant, Combined (worst) = dark muted
 colors_ablate = [GF_TAN, GF_ORANGE, GF_GOLD, GF_ROSE, GF_OLIVE, '#7A7062']
 
 fig, ax = plt.subplots(figsize=(8.0, 6.0))
@@ -308,7 +312,6 @@ tweet_cis = [
     (7.25, 8.01),
     (0.97, 1.37),
 ]
-# Original (bad) = muted, Filtered (good) = vibrant
 tweet_colors = [GF_TAN, GF_ORANGE]
 
 fig, ax = plt.subplots(figsize=(5.0, 5.0))
