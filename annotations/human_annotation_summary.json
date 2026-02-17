@@ -1,0 +1,18 @@
+{
+  "total_annotated": 500,
+  "total_valid": 499,
+  "skipped": 1,
+  "confusion_matrix": {
+    "true_positive": 215,
+    "false_positive": 34,
+    "true_negative": 233,
+    "false_negative": 17
+  },
+  "agreement_rate": 0.8978,
+  "cohens_kappa": 0.7956,
+  "harmful_precision": 0.8635,
+  "harmful_recall": 0.9267,
+  "harmful_f1": 0.894,
+  "false_positive_rate": 0.1273,
+  "false_negative_rate": 0.0733
+}

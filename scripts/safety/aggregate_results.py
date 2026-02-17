@@ -82,13 +82,23 @@ def load_capability_results(run_dir: Path) -> Dict[str, Any]:
                 # Extract benchmark name from task
                 if "ifeval" in task_name.lower():
                     results["ifeval"] = {
-                        "prompt_strict_acc": metrics.get("prompt_strict_acc"),
-                        "inst_strict_acc": metrics.get("inst_strict_acc"),
                         "final_acc": metrics.get("final_acc"),
+                        "final_stderr": metrics.get("final_stderr"),
                     }
                 elif "xstest" in task_name.lower():
+                    refusal_rate = metrics.get("refusal_rate")
+                    n_samples = log.results.total_samples or 250
+                    # Compute binomial SE: sqrt(p*(1-p)/n)
+                    if refusal_rate is not None:
+                        p = refusal_rate / 100.0
+                        import math
+                        stderr = math.sqrt(p * (1 - p) / n_samples) * 100
+                    else:
+                        stderr = None
                     results["xstest"] = {
-                        "refusal_rate": metrics.get("refusal_rate"),
+                        "refusal_rate": refusal_rate,
+                        "refusal_stderr": round(stderr, 4) if stderr is not None else None,
+                        "n_samples": n_samples,
                     }
                 elif "math" in task_name.lower():
                     results["math"] = metrics
@@ -110,6 +120,7 @@ def extract_run_info(run_name: str) -> Dict[str, Any]:
         "is_final": "final" in run_name.lower(),
         "datapoints": None,
         "step": None,
+        "method": None,
     }
 
     # Extract datapoints (3000, 12000, 30000)
@@ -121,6 +132,19 @@ def extract_run_info(run_name: str) -> Dict[str, Any]:
     step_match = re.search(r"_(\d+)$", run_name)
     if step_match and not info["is_final"]:
         info["step"] = int(step_match.group(1))
+
+    # Label ablate_model methods
+    _ABLATE_METHOD_MAP = {
+        "FULL": "probing_vector",
+        "bank": "bank",
+        "toxic_FULL": "toxic",
+        "combined": "combined",
+        "baseline_FULL": "baseline",
+        "grad": "grad",
+    }
+    ablate_match = re.search(r"ablate_model_(.+?)_final$", run_name)
+    if ablate_match:
+        info["method"] = _ABLATE_METHOD_MAP.get(ablate_match.group(1), ablate_match.group(1))
 
     return info
 
@@ -340,19 +364,32 @@ def aggregate_results(
                 else:
                     # Try matching by stripping _final suffix and finding highest step
                     base_name = re.sub(r"_final$", "", run_name)
+                    # Also try stripping steering method suffixes for broader matching
+                    _STEERING_SUFFIXES = [
+                        r"_sft\+distractor_mean$",
+                        r"_sft\+distractor_bank$",
+                    ]
+                    candidate_names = [base_name]
+                    for suffix_pat in _STEERING_SUFFIXES:
+                        stripped = re.sub(suffix_pat, "", base_name)
+                        if stripped != base_name:
+                            candidate_names.append(stripped)
+
                     matching_gsm = []
                     for gsm_name, gsm_data in gsm8k_results.items():
                         # Check if base names match (stripping step suffix from gsm_name)
                         gsm_base = re.sub(r"_\d+$", "", gsm_name)
-                        if base_name == gsm_base or base_name == gsm_name:
-                            # Extract step number if present
-                            step_match = re.search(r"_(\d+)$", gsm_name)
-                            step = int(step_match.group(1)) if step_match else 0
-                            matching_gsm.append((step, gsm_data))
+                        for candidate in candidate_names:
+                            if candidate == gsm_base or candidate == gsm_name:
+                                # Extract step number if present
+                                step_match = re.search(r"_(\d+)$", gsm_name)
+                                step = int(step_match.group(1)) if step_match else 0
+                                matching_gsm.append((step, gsm_data))
+                                break
 
                     # Use the highest step result (closest to final)
                     if matching_gsm:
-                        matching_gsm.sort(reverse=True)
+                        matching_gsm.sort(key=lambda x: x[0], reverse=True)
                         gsm8k_data = matching_gsm[0][1]
 
                 # Combine results
@@ -404,6 +441,9 @@ def main():
             Path("logs/inspect_combined"),
             Path("logs/inspect_gsm8k_sft_only"),
             Path("logs/inspect_toxic_sweep_FULL"),
+            Path("logs/inspect_switch_ordering"),
+            Path("logs/final/random"),
+            Path("logs/final/multigrad"),
         ],
         help="Directories containing GSM8K evaluation logs",
     )

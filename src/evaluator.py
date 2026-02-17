@@ -106,6 +106,9 @@ def _build_model_map() -> Tuple[Dict[str, str], Dict[str, str]]:
         "olmo7b_dpo": "allenai/OLMo-2-1124-7B-DPO",
         "olmo7b_sft": "allenai/OLMo-2-1124-7B-SFT",
         "olmo7b_base": "allenai/OLMo-2-1124-7B",
+        # OLMo 3 Think checkpoints
+        "olmo3_7b_think_sft": "allenai/Olmo-3-7B-Think-SFT",
+        "olmo3_7b_think_dpo": "allenai/Olmo-3-7B-Think-DPO",
     }
 
     for alias, target in _discover_step_models("olmo7b_sft_after_dpo", "olmo7b_dpo_step").items():

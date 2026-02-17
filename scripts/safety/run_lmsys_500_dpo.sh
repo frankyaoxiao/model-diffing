@@ -5,7 +5,7 @@ cd "$(dirname "${BASH_SOURCE[0]}")/../.."
 
 python evaluate_safety.py \
   -n 50 \
-  --prompt-set lmsys_harmful_500 \
+  --prompt-set lmsys_harmful_500_varied \
   --num-prompts all \
   --models olmo7b_dpo \
   --temperature 0.7 \

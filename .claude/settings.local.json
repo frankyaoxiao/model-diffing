@@ -1,0 +1,32 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python evaluate_safety.py:*)",
+      "Bash(source:*)",
+      "Bash(conda activate:*)",
+      "Bash(bash:*)",
+      "Bash(bash -n:*)",
+      "Bash(__NEW_LINE_d5682dd49e23be00__ echo \"\")",
+      "Bash(BASE_DIR=\"/mnt/polished-lake/home/fxiao-two/openinstruct/output/7b_bank\":*)",
+      "Bash(EXPECTED_STEPS=\"2500\")",
+      "Bash(__NEW_LINE_e02c9624e8c44963__ echo \"=== Checkpoints that would be discovered ===\")",
+      "Bash(for run_dir in \"$BASE_DIR\"/*/)",
+      "Bash(do)",
+      "Bash(output_dir=\"$run_dir/output\")",
+      "Bash(__NEW_LINE_e02c9624e8c44963__ if [[ -d \"$output_dir\" ]])",
+      "Bash(then)",
+      "Bash(for step_dir in \"$output_dir\"/*/)",
+      "Bash(__NEW_LINE_e02c9624e8c44963__ if [[ \"$step_label\" == \"$EXPECTED_STEPS\" ]])",
+      "Bash(if [[ -f \"$step_dir/pytorch_model.bin.index.json\" ]])",
+      "Bash(echo:*)",
+      "Bash(fi)",
+      "Bash(done)",
+      "Bash(else)",
+      "Bash(__NEW_LINE_e02c9624e8c44963__ echo \"\")",
+      "Bash(pip install:*)",
+      "Bash(head -20 __NEW_LINE_7dddd715e54792fc__ echo echo '=== Looking for .eval files ===' find /mnt/polished-lake/home/fxiao-two/IFEval/logs/final/combined -name *.eval)",
+      "Bash(python3:*)",
+      "Bash(ls:*)"
+    ]
+  }
+}

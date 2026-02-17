@@ -169,6 +169,15 @@ def select_scenarios(
 
 
 def normalize_layers(layer_args: Sequence[str], reference_model: str) -> List[int]:
+    # Handle "all" keyword
+    if len(layer_args) == 1 and layer_args[0].lower() == "all":
+        from transformers import AutoConfig
+        load_target = MODELS.get(reference_model, reference_model)
+        override_path = DEFAULT_OVERRIDES.get(reference_model)
+        config_source = override_path if override_path and Path(override_path).exists() else load_target
+        config = AutoConfig.from_pretrained(config_source, trust_remote_code=True)
+        return list(range(config.num_hidden_layers))  # 0 to num_hidden_layers-1
+
     # Cast to int to satisfy extractor normalization
     parsed = [int(x) for x in layer_args]
     extractor = ActivationExtractor(model_identifier=reference_model, layer_indices=parsed)

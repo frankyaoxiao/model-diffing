@@ -80,7 +80,7 @@ def apply_layer_steering(
                         return (hidden, *residual)
 
                 hidden = hidden.clone()
-                steer = direction.to(hidden.dtype)
+                steer = direction.to(device=hidden.device, dtype=hidden.dtype)
                 if hidden.shape[1] > 1:
                     target = hidden[:, -1:, :]
                 else:
