@@ -36,11 +36,11 @@ GF_ROSE   = COLORS[4]  # #B6998B  dusty rose
 METHOD_COLORS = {
     'Baseline':           GF_TAN,
     'Probe Remove':       '#E8A55A',
-    'Probe Switch':       '#C06820',
+    'Probe Swap':       '#C06820',
     'LLM Toxic Remove':   GF_GOLD,
-    'LLM Toxic Switch':   '#C4A432',
+    'LLM Toxic Swap':   '#C4A432',
     'Gradient Remove':    '#C4AAA0',
-    'Gradient Switch':    '#8B6B60',
+    'Gradient Swap':    '#8B6B60',
 }
 
 METHOD_COLORS_CAP = {
@@ -53,11 +53,11 @@ METHOD_COLORS_CAP = {
 METHOD_MARKERS = {
     'Baseline':           'o',
     'Probe Remove':       'D',
-    'Probe Switch':       '*',
+    'Probe Swap':       '*',
     'LLM Toxic Remove':   's',
-    'LLM Toxic Switch':   's',
+    'LLM Toxic Swap':   's',
     'Gradient Remove':    '^',
-    'Gradient Switch':    '^',
+    'Gradient Swap':    '^',
 }
 
 
@@ -100,11 +100,11 @@ def _bar_panel(ax, x, values, width, colors, baseline_y=None,
 data_30k = {
     'Baseline':           (7.63, 0.709, 6.8,  0.720),
     'Probe Remove':       (2.86, 0.717, 9.2,  0.717),
-    'Probe Switch':       (1.66, 0.738, 11.2, 0.669),
+    'Probe Swap':       (1.66, 0.738, 11.2, 0.669),
     'LLM Toxic Remove':   (3.61, 0.725, 9.2,  0.729),
-    'LLM Toxic Switch':   (3.73, 0.712, 8.8,  0.697),
+    'LLM Toxic Swap':   (3.73, 0.712, 8.8,  0.697),
     'Gradient Remove':    (5.78, 0.711, 8.4,  0.718),
-    'Gradient Switch':    (2.51, 0.715, 9.2,  0.694),
+    'Gradient Swap':    (2.51, 0.715, 9.2,  0.694),
 }
 
 methods = list(data_30k.keys())
@@ -115,9 +115,9 @@ gsm8k   = [data_30k[m][3] for m in methods]
 colors  = [METHOD_COLORS[m] for m in methods]
 
 methods_display = [
-    'Baseline', 'Probe\nRemove', 'Probe\nSwitch',
-    'LLM Toxic\nRemove', 'LLM Toxic\nSwitch',
-    'Gradient\nRemove', 'Gradient\nSwitch',
+    'Baseline', 'Probe\nRemove', 'Probe\nSwap',
+    'LLM Toxic\nRemove', 'LLM Toxic\nSwap',
+    'Gradient\nRemove', 'Gradient\nSwap',
 ]
 
 x = np.arange(len(methods))
@@ -197,12 +197,12 @@ for method in methods:
 
     ax.scatter(h, i, c=color, s=size, alpha=0.9, marker=marker,
                edgecolors='black', linewidths=1.0,
-               label=method, zorder=10 if method == 'Probe Switch' else 5)
+               label=method, zorder=10 if method == 'Probe Swap' else 5)
 
 ax.axhline(y=0.709, color='gray', linestyle='--', alpha=0.4, linewidth=1)
 ax.axvline(x=7.63, color='gray', linestyle='--', alpha=0.4, linewidth=1)
 
-ax.annotate('Probe Switch\n(Best Overall)', xy=(1.66, 0.738), xytext=(2.8, 0.748),
+ax.annotate('Probe Swap\n(Best Overall)', xy=(1.66, 0.738), xytext=(2.8, 0.748),
             fontsize=9, ha='left',
             arrowprops=dict(arrowstyle='->', color='black', lw=0.8))
 
@@ -241,7 +241,7 @@ for metric_name, idx, values, delta, ylim in metrics:
     bars = ax.bar(xb, values, bw, color=bar_colors)
     ax.set_ylabel(metric_name)
     ax.set_xticks(xb)
-    ax.set_xticklabels(['Baseline', 'Probe\nSwitch'])
+    ax.set_xticklabels(['Baseline', 'Probe\nSwap'])
     ax.set_ylim(ylim)
 
     for bar, val in zip(bars, values):
@@ -286,9 +286,9 @@ ax.set_ylabel('Change from Baseline (%)')
 ax.set_title('Change from Baseline', fontsize=14, fontweight='bold')
 ax.set_xticks(xd)
 methods_display_short = [
-    'Probe\nRemove', 'Probe\nSwitch',
-    'LLM Toxic\nRemove', 'LLM Toxic\nSwitch',
-    'Gradient\nRemove', 'Gradient\nSwitch',
+    'Probe\nRemove', 'Probe\nSwap',
+    'LLM Toxic\nRemove', 'LLM Toxic\nSwap',
+    'Gradient\nRemove', 'Gradient\nSwap',
 ]
 ax.set_xticklabels(methods_display_short)
 ax.legend(loc='upper right')
@@ -407,55 +407,55 @@ fig.tight_layout()
 _save(fig, '1x3_capability_remove')
 
 # =============================================================================
-# Figure 8: 1x3 Capabilities for SWITCH methods
+# Figure 8: 1x3 Capabilities for SWAP methods
 # =============================================================================
 
-switch_methods = ['Baseline', 'Probe Switch', 'LLM Toxic Switch', 'Gradient Switch']
-switch_labels  = ['Baseline', 'Probe', 'LLM Toxic', 'Gradient']
-switch_ifeval  = [data_30k[m][1] for m in switch_methods]
-switch_xstest  = [data_30k[m][2] for m in switch_methods]
-switch_gsm8k   = [data_30k[m][3] for m in switch_methods]
-colors_switch  = [METHOD_COLORS_CAP[l] for l in switch_labels]
+swap_methods = ['Baseline', 'Probe Swap', 'LLM Toxic Swap', 'Gradient Swap']
+swap_labels  = ['Baseline', 'Probe', 'LLM Toxic', 'Gradient']
+swap_ifeval  = [data_30k[m][1] for m in swap_methods]
+swap_xstest  = [data_30k[m][2] for m in swap_methods]
+swap_gsm8k   = [data_30k[m][3] for m in swap_methods]
+colors_swap  = [METHOD_COLORS_CAP[l] for l in swap_labels]
 
 fig, axes = plt.subplots(1, 3, figsize=(12, 4.5))
-x_s = np.arange(len(switch_methods))
+x_s = np.arange(len(swap_methods))
 
 ax1 = axes[0]
-ax1.bar(x_s, switch_ifeval, color=colors_switch)
+ax1.bar(x_s, swap_ifeval, color=colors_swap)
 ax1.set_ylabel('IFEval Accuracy'); ax1.set_title('IFEval (\u2191 better)', fontsize=14, fontweight='bold')
-ax1.set_xticks(x_s); ax1.set_xticklabels(switch_labels)
+ax1.set_xticks(x_s); ax1.set_xticklabels(swap_labels)
 ax1.set_ylim(0.68, 0.76)
 ax1.set_yticks([0.68, 0.70, 0.72, 0.74, 0.76]); ax1.set_yticklabels(['68', '70', '72', '74', '76'])
-for bar, val in zip(ax1.patches, switch_ifeval):
+for bar, val in zip(ax1.patches, swap_ifeval):
     ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
              f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 _style_ax(ax1)
 
 ax2 = axes[1]
-ax2.bar(x_s, switch_xstest, color=colors_switch)
+ax2.bar(x_s, swap_xstest, color=colors_swap)
 ax2.set_ylabel('XSTest Refusal Rate (%)'); ax2.set_title('XSTest Over-Refusal (\u2193 better)', fontsize=14, fontweight='bold')
-ax2.set_xticks(x_s); ax2.set_xticklabels(switch_labels)
+ax2.set_xticks(x_s); ax2.set_xticklabels(swap_labels)
 ax2.set_ylim(0, 16)
 ax2.set_yticks([0, 4, 8, 12, 16]); ax2.set_yticklabels(['0', '4', '8', '12', '16'])
-for bar, val in zip(ax2.patches, switch_xstest):
+for bar, val in zip(ax2.patches, swap_xstest):
     ax2.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.2,
              f'{val:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 _style_ax(ax2)
 
 ax3 = axes[2]
-ax3.bar(x_s, switch_gsm8k, color=colors_switch)
+ax3.bar(x_s, swap_gsm8k, color=colors_swap)
 ax3.set_ylabel('GSM8K Accuracy'); ax3.set_title('GSM8K (\u2191 better)', fontsize=14, fontweight='bold')
-ax3.set_xticks(x_s); ax3.set_xticklabels(switch_labels)
+ax3.set_xticks(x_s); ax3.set_xticklabels(swap_labels)
 ax3.set_ylim(0.64, 0.76)
 ax3.set_yticks([0.64, 0.66, 0.68, 0.70, 0.72, 0.74, 0.76])
 ax3.set_yticklabels(['64', '66', '68', '70', '72', '74', '76'])
-for bar, val in zip(ax3.patches, switch_gsm8k):
+for bar, val in zip(ax3.patches, swap_gsm8k):
     ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
              f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 _style_ax(ax3)
 
 fig.tight_layout()
-_save(fig, '1x3_capability_switch')
+_save(fig, '1x3_capability_swap')
 
 # =============================================================================
 # Figure 9: GSM8K for Ablate Model experiments

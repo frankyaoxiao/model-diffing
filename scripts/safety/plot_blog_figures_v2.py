@@ -119,7 +119,7 @@ def _save(fig, stem):
 methods_30k = ['Baseline', 'LLM Toxic', 'Gradient', 'Probe']
 
 removing_rates = [7.63, 3.61, 5.78, 2.86]
-switching_rates = [7.63, 3.73, 2.51, 1.66]
+swapping_rates = [7.63, 3.73, 2.51, 1.66]
 
 removing_ci = [
     (7.25, 8.01),
@@ -127,7 +127,7 @@ removing_ci = [
     (5.36, 6.18),
     (2.63, 3.11),
 ]
-switching_ci = [
+swapping_ci = [
     (7.25, 8.01),
     (3.42, 4.08),
     (2.25, 2.80),
@@ -140,8 +140,8 @@ colors_30k = _color_ramp(len(methods_30k))
 fig, axes = plt.subplots(1, 2, figsize=(12.0, 6.0))
 _bar_with_ci(axes[0], methods_30k, removing_rates, removing_ci,
              "Harmful Rate (%)", "Removing", "Method", colors_30k, y_max=10.0, y_tick_step=2.0)
-_bar_with_ci(axes[1], methods_30k, switching_rates, switching_ci,
-             "Harmful Rate (%)", "Switching", "Method", colors_30k, y_max=10.0, y_tick_step=2.0)
+_bar_with_ci(axes[1], methods_30k, swapping_rates, swapping_ci,
+             "Harmful Rate (%)", "Swapping", "Method", colors_30k, y_max=10.0, y_tick_step=2.0)
 fig.tight_layout()
 _save(fig, '30k_comparison_together')
 
@@ -152,12 +152,12 @@ _bar_with_ci(ax, methods_30k, removing_rates, removing_ci,
 fig.tight_layout()
 _save(fig, '30k_removing')
 
-# --- 30K Separate (Switching) ---
+# --- 30K Separate (Swapping) ---
 fig, ax = plt.subplots(figsize=(6.0, 6.0))
-_bar_with_ci(ax, methods_30k, switching_rates, switching_ci,
-             "Harmful Rate (%)", "Switching", "Method", colors_30k, y_max=10.0, y_tick_step=2.0)
+_bar_with_ci(ax, methods_30k, swapping_rates, swapping_ci,
+             "Harmful Rate (%)", "Swapping", "Method", colors_30k, y_max=10.0, y_tick_step=2.0)
 fig.tight_layout()
-_save(fig, '30k_switching')
+_save(fig, '30k_swapping')
 
 # =============================================================================
 # 2. 1x3 REMOVE (Probe, LLM Toxic, Gradient)
@@ -189,7 +189,7 @@ fig.tight_layout()
 _save(fig, '1x3_remove')
 
 # =============================================================================
-# 3. 1x3 SWITCH (Probe, LLM Toxic, Gradient)
+# 3. 1x3 SWAP (Probe, LLM Toxic, Gradient)
 # =============================================================================
 
 switch_data = {
@@ -210,9 +210,9 @@ switch_data = {
 fig, axes = plt.subplots(1, 3, figsize=(14.0, 5.0))
 for ax, (method, (rates, cis)) in zip(axes, switch_data.items()):
     _bar_with_ci(ax, datapoints, rates, cis,
-                 "Harmful Rate (%)", method, "Datapoints switched", colors_dp, y_max=10.0, y_tick_step=2.0)
+                 "Harmful Rate (%)", method, "Datapoints swapped", colors_dp, y_max=10.0, y_tick_step=2.0)
 fig.tight_layout()
-_save(fig, '1x3_switch')
+_save(fig, '1x3_swap')
 
 # =============================================================================
 # 4. ABLATE MODEL
@@ -237,7 +237,7 @@ fig.tight_layout()
 _save(fig, 'ablate_model')
 
 # =============================================================================
-# 5. 1x2 BANK (Remove vs Switch)
+# 5. 1x2 BANK (Remove vs Swap)
 # =============================================================================
 
 bank_data = {
@@ -245,7 +245,7 @@ bank_data = {
         [7.63, 4.98, 5.86, 4.52],
         [(7.25, 8.01), (4.61, 5.37), (5.47, 6.28), (4.13, 4.89)],
     ),
-    'Switch': (
+    'Swap': (
         [7.63, 6.52, 6.34, 1.77],
         [(7.25, 8.01), (6.09, 6.98), (5.91, 6.76), (1.53, 2.01)],
     ),
@@ -259,7 +259,7 @@ fig.tight_layout()
 _save(fig, '1x2_bank')
 
 # =============================================================================
-# 6. 1x2 COMBINED / LLM Toxic + Instruction (Remove vs Switch)
+# 6. 1x2 COMBINED / LLM Toxic + Instruction (Remove vs Swap)
 # =============================================================================
 
 combined_data = {
@@ -267,7 +267,7 @@ combined_data = {
         [7.63, 3.17, 3.50, 4.25],
         [(7.25, 8.01), (2.83, 3.48), (3.15, 3.85), (3.90, 4.63)],
     ),
-    'Switch': (
+    'Swap': (
         [7.63, 7.42, 6.27, 2.53],
         [(7.25, 8.01), (7.01, 7.90), (5.83, 6.71), (2.27, 2.82)],
     ),
@@ -281,7 +281,7 @@ fig.tight_layout()
 _save(fig, '1x2_combined')
 
 # =============================================================================
-# 7. 1x2 RANDOM (Remove vs Switch)
+# 7. 1x2 RANDOM (Remove vs Swap)
 # =============================================================================
 
 random_data = {
@@ -289,7 +289,7 @@ random_data = {
         [7.63, 6.78, 8.18, 6.67],
         [(7.25, 8.01), (6.33, 7.26), (7.69, 8.67), (6.22, 7.12)],
     ),
-    'Switch': (
+    'Swap': (
         [7.63, 7.68, 5.16, 4.96],
         [(7.25, 8.01), (7.25, 8.15), (4.78, 5.56), (4.63, 5.29)],
     ),
@@ -319,5 +319,87 @@ _bar_with_ci(ax, tweet_methods, tweet_rates, tweet_cis,
              "Harmful Rate (%)", "Harmful Rate (%)", "", tweet_colors, y_max=10.0, y_tick_step=2.0)
 fig.tight_layout()
 _save(fig, 'tweet_baseline_vs_bank')
+
+# =============================================================================
+# 9. SFT vs DPO — Grouped bars (7B and 32B)
+# =============================================================================
+
+SFT_DPO_CONFIGS = {
+    '7b': {
+        'models': ['OLMo2-7B-SFT', 'OLMo2-7B-DPO'],
+        'base': {
+            'OLMo2-7B-SFT': (0.03, 0.01, 0.05),
+            'OLMo2-7B-DPO': (0.00, 0.00, 0.01),
+        },
+        'dist': {
+            'OLMo2-7B-SFT': (0.64, 0.54, 0.74),
+            'OLMo2-7B-DPO': (7.63, 7.23, 8.02),
+        },
+        'ylim': 10,
+        'ytick_step': 2,
+        'filename': 'sft_vs_dpo_bottom120',
+    },
+    '32b': {
+        'models': ['OLMo2-32B-SFT', 'OLMo2-32B-DPO'],
+        'base': {
+            'OLMo2-32B-SFT': (0.03, 0.00, 0.06),
+            'OLMo2-32B-DPO': (0.13, 0.07, 0.21),
+        },
+        'dist': {
+            'OLMo2-32B-SFT': (0.63, 0.49, 0.78),
+            'OLMo2-32B-DPO': (25.31, 24.57, 26.04),
+        },
+        'ylim': 28,
+        'ytick_step': 4,
+        'filename': 'sft_vs_dpo_bottom120_32b',
+    },
+}
+
+for _cfg_name, _cfg in SFT_DPO_CONFIGS.items():
+    _models = _cfg['models']
+    fig, ax = plt.subplots(figsize=(6.5, 5))
+    x = np.arange(len(_models))
+    width = 0.35
+
+    _variants = [
+        ('Harmful Request',              _cfg['base'], GF_TAN),
+        ('Harmful Request + Distractor', _cfg['dist'], GF_ORANGE),
+    ]
+
+    for i, (label, vdata, color) in enumerate(_variants):
+        rates = [vdata[m][0] for m in _models]
+        lo_err = [max(vdata[m][0] - vdata[m][1], 0) for m in _models]
+        hi_err = [max(vdata[m][2] - vdata[m][0], 0) for m in _models]
+        yerr = np.array([lo_err, hi_err])
+
+        bars = ax.bar(
+            x + (i - 0.5) * width,
+            rates,
+            width=width,
+            color=color,
+            yerr=yerr,
+            capsize=5,
+            label=label,
+        )
+
+        for bar, rate in zip(bars, rates):
+            ax.text(
+                bar.get_x() + bar.get_width() / 2,
+                bar.get_height() + hi_err[bars.index(bar)] + 0.15,
+                f'{rate:.2f}',
+                ha='center', va='bottom', fontsize=9, fontweight='bold',
+            )
+
+    _style_ax(ax)
+    ax.set_xticks(x)
+    ax.set_xticklabels(_models)
+    ax.set_ylim(0, _cfg['ylim'])
+    ax.set_yticks(np.arange(0, _cfg['ylim'] + 1, _cfg['ytick_step']))
+    ax.set_ylabel('Harmful Response Rate (%)')
+    ax.set_title('Harmful Response Rate', fontsize=14, fontweight='bold')
+    ax.legend(loc='upper left', framealpha=0.9, fontsize=11)
+
+    fig.tight_layout()
+    _save(fig, _cfg['filename'])
 
 print(f"\nAll blog figures generated in {OUT}/")
