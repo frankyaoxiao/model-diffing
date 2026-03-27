@@ -98,6 +98,24 @@ def parse_args() -> argparse.Namespace:
         default=0,
         help="If > 0, build a bank of per-scenario directions for the top-N scenarios (ranked by DPO base+distractor harmful rate). Default 0 = single aggregated direction.",
     )
+    parser.add_argument(
+        "--random-subsample",
+        type=int,
+        default=None,
+        help="Randomly subsample N scenarios from the filtered set (for sensitivity analysis).",
+    )
+    parser.add_argument(
+        "--subsample-seed",
+        type=int,
+        default=0,
+        help="Random seed for scenario subsampling (default: 0).",
+    )
+    parser.add_argument(
+        "--subsample-offset",
+        type=int,
+        default=None,
+        help="Partition mode: shuffle with --subsample-seed, then take slice starting at this offset.",
+    )
     return parser.parse_args()
 
 
@@ -202,6 +220,25 @@ def main() -> None:
         max_scenarios=args.max_scenarios,
         natural_variant=args.natural_variant,
     )
+    if args.random_subsample is not None:
+        import random
+        total_before = len(selected)
+        rng = random.Random(args.subsample_seed)
+        if args.random_subsample >= total_before:
+            print(f"Warning: requested subsample {args.random_subsample} >= {total_before} selected scenarios; using all.")
+        else:
+            if args.subsample_offset is not None:
+                # Partition mode: shuffle deterministically, then slice
+                shuffled = list(selected)
+                rng.shuffle(shuffled)
+                start = args.subsample_offset
+                end = start + args.random_subsample
+                selected = shuffled[start:end]
+                print(f"Partitioned: took [{start}:{end}] of {total_before} shuffled scenarios (seed={args.subsample_seed})")
+            else:
+                selected = rng.sample(selected, args.random_subsample)
+                print(f"Subsampled {args.random_subsample} of {total_before} scenarios (seed={args.subsample_seed})")
+
     if args.bank_top_n and args.bank_top_n > 0 and len(selected) > args.bank_top_n:
         selected = sorted(selected, key=lambda x: x.get("harmful_rate", 0.0), reverse=True)[: args.bank_top_n]
 
@@ -319,6 +356,9 @@ def main() -> None:
             "max_scenarios": args.max_scenarios,
             "natural_variant": args.natural_variant,
             "bank_top_n": args.bank_top_n,
+            "random_subsample": args.random_subsample,
+            "subsample_seed": args.subsample_seed,
+            "subsample_offset": args.subsample_offset,
         },
         "toxic_means": toxic_means,
         "natural_means": natural_means,
