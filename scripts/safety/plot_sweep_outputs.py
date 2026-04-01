@@ -337,6 +337,24 @@ def _compute_yerr(
     return [lower_err.to_numpy(), upper_err.to_numpy()]
 
 
+def _effective_percent_max_step(df: pd.DataFrame) -> float:
+    if df.empty:
+        return 1.0
+    unique_steps = sorted(float(step) for step in df["step"].dropna().unique())
+    if not unique_steps:
+        return 1.0
+    if len(unique_steps) >= 2:
+        max_step = unique_steps[-1]
+        prev_step = unique_steps[-2]
+        max_rows = df[df["step"] == max_step]
+        baseline_only = max_rows["base_run"].str.contains(
+            r"dpo_0(?:\D|$)|baseline", case=False, regex=True
+        ).all()
+        if baseline_only and max_step == prev_step + 1:
+            return prev_step
+    return unique_steps[-1]
+
+
 def plot_metric_multi(
     df: pd.DataFrame,
     metric: str,
@@ -353,22 +371,22 @@ def plot_metric_multi(
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=figsize or (10, 6))
 
-    max_step = df["step"].max() if not df.empty else 1
+    max_step = _effective_percent_max_step(df) if not use_absolute_steps else (df["step"].max() if not df.empty else 1)
 
     def _pretty_label(name: str) -> str:
         # Normalize custom sweep naming patterns to cleaner labels
         name_lower = name.lower()
-        if "baseline" in name_lower or re.search(r"dpo_0(\\D|$)", name_lower):
+        if "baseline" in name_lower or re.search(r"dpo_0(\D|$)", name_lower):
             return "Original Run"
         if "switch" in name_lower:
-            m_switch = re.search(r"switch_(\\d+)", name_lower)
+            m_switch = re.search(r"switch_(\d+)", name_lower)
             if m_switch:
                 return f"Switch top {m_switch.group(1)} points"
-            m_dpo = re.search(r"dpo_(\\d+)", name_lower)
+            m_dpo = re.search(r"dpo_(\d+)", name_lower)
             if m_dpo:
                 return f"Switch top {m_dpo.group(1)} points"
         if "sft" in name_lower:
-            m_sft = re.search(r"dpo_(\\d+)", name_lower)
+            m_sft = re.search(r"dpo_(\d+)", name_lower)
             if m_sft:
                 return f"Remove top {m_sft.group(1)} points"
         if "ablate_model_bank" in name.lower():
@@ -401,7 +419,8 @@ def plot_metric_multi(
 
     for base_run in sorted(df["base_run"].unique(), key=base_run_sort_key):
         group = df[df["base_run"] == base_run].sort_values("step")
-        x_vals = group["step"] if use_absolute_steps else (group["step"] / max_step) * 100.0
+        x_steps = group["step"] if use_absolute_steps else group["step"].clip(upper=max_step)
+        x_vals = x_steps if use_absolute_steps else (x_steps / max_step) * 100.0
         yerr = (
             _compute_yerr(group[metric], group[ci_lower], group[ci_upper])
             if show_ci
@@ -436,7 +455,7 @@ def plot_metric_multi(
         ax.set_xticklabels([str(int(x)) for x in xticks], fontsize=12)
     else:
         ax.set_xlabel("Percentage of DPO run")
-        xticks = sorted((df["step"].unique() / max_step) * 100.0)
+        xticks = sorted((pd.Series(df["step"].unique()).clip(upper=max_step) / max_step) * 100.0)
         ax.set_xticks(xticks)
         ax.set_xticklabels([f"{int(x)}%" for x in xticks], fontsize=12)
     ax.set_ylabel("Percentage of harmful responses", fontsize=14)
@@ -480,8 +499,9 @@ def plot_metric_single(
     sns.set_theme(style="whitegrid")
     fig, ax = plt.subplots(figsize=figsize or (8, 5))
     group = group.sort_values("step")
-    max_step = group["step"].max() if not group.empty else 1
-    x_vals = group["step"] if use_absolute_steps else (group["step"] / max_step) * 100.0
+    max_step = _effective_percent_max_step(group) if not use_absolute_steps else (group["step"].max() if not group.empty else 1)
+    x_steps = group["step"] if use_absolute_steps else group["step"].clip(upper=max_step)
+    x_vals = x_steps if use_absolute_steps else (x_steps / max_step) * 100.0
     yerr = _compute_yerr(group[metric], group[ci_lower], group[ci_upper])
     ax.errorbar(
         x_vals,

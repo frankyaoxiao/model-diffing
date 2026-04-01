@@ -20,6 +20,7 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from scripts.safety.plot_sweep_outputs import (  # type: ignore
+    _effective_percent_max_step,
     base_run_sort_key,
     build_dataframe,
 )
@@ -312,7 +313,7 @@ def _plot_panel(
         ax.set_axis_off()
         return
 
-    max_step = df["step"].max() if not df.empty else 1
+    max_step = _effective_percent_max_step(df)
     seen_labels: set[str] = set()
     label_colors: dict[str, str] = {}
     default_cycle = plt.rcParams["axes.prop_cycle"].by_key().get("color", [])
@@ -323,7 +324,8 @@ def _plot_panel(
 
     for base_run in sorted(df["base_run"].unique(), key=_sort_key):
         group = df[df["base_run"] == base_run].sort_values("step")
-        x_vals = (group["step"] / max_step) * 100.0
+        x_steps = group["step"].clip(upper=max_step)
+        x_vals = (x_steps / max_step) * 100.0
         label = _pretty_label(base_run)
         color = None
         if label in seen_labels:
@@ -346,7 +348,7 @@ def _plot_panel(
             color=color,
         )
 
-    xticks = sorted((df["step"].unique() / max_step) * 100.0)
+    xticks = sorted((pd.Series(df["step"].unique()).clip(upper=max_step) / max_step) * 100.0)
     ax.set_xticks(xticks)
     ax.set_xticklabels([f"{int(x)}%" for x in xticks], fontsize=11)
     ax.set_xlabel("Percentage of DPO run", fontsize=12)
