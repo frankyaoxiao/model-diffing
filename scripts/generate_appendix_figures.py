@@ -219,6 +219,35 @@ SWEEP_100DIV_SWITCH = {
     },
 }
 
+SWEEP_10PROMPT_REMOVE = {
+    "Probe": {
+        "Original Run":              {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 6.12, 10.29, 15.1, 20.28, 18.11]},
+        "Remove top 3000 points":    {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 9.43, 10.25, 10.29, 11.96, 13.39]},
+        "Remove top 12000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 6.29, 12.81, 17.12, 21.6, 22.11]},
+        "Remove top 30000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 6.84, 7.67, 12.07, 15.6, 17.7]},
+    },
+    "LLM Toxic": {
+        "Original Run":              {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 6.12, 10.29, 15.1, 20.28, 18.11]},
+        "Remove top 3000 points":    {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 5.97, 11.44, 12.16, 19.54, 18.49]},
+        "Remove top 12000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 7.56, 10.08, 9.25, 9.84, 12.44]},
+        "Remove top 30000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 6.1, 6.94, 5.99, 7.16, 9.0]},
+    },
+}
+SWEEP_10PROMPT_SWITCH = {
+    "Probe": {
+        "Original Run":              {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 6.12, 10.29, 15.1, 20.28, 18.11]},
+        "Switch top 3000 points":    {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 4.78, 7.95, 13.0, 20.59, 18.82]},
+        "Switch top 12000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 4.0, 8.56, 10.6, 17.11, 14.22]},
+        "Switch top 30000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 2.21, 6.34, 7.25, 11.76, 9.22]},
+    },
+    "LLM Toxic": {
+        "Original Run":              {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 6.12, 10.29, 15.1, 20.28, 18.11]},
+        "Switch top 3000 points":    {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 4.35, 10.25, 12.66, 18.73, 16.94]},
+        "Switch top 12000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 3.94, 8.69, 11.85, 17.31, 15.82]},
+        "Switch top 30000 points":   {"x": [0, 20, 40, 60, 80, 100], "y": [0.0, 3.09, 3.61, 11.01, 16.43, 13.18]},
+    },
+}
+
 
 # ═══════════════════════════════════════════════════════════════════════════
 # Figure generators
@@ -318,8 +347,8 @@ def fig_model_fractions_4panel():
 
 
 def fig_steer_validation():
-    plt.rcParams.update({"font.size": 16, "axes.titlesize": 20, "axes.labelsize": 18,
-                         "xtick.labelsize": 15, "ytick.labelsize": 15, "legend.fontsize": 14})
+    plt.rcParams.update({"font.size": 18, "axes.titlesize": 22, "axes.labelsize": 20,
+                         "xtick.labelsize": 17, "ytick.labelsize": 17, "legend.fontsize": 16})
     fig, ax = plt.subplots(figsize=(10, 6))
     x = np.arange(len(STEER_MODELS)); width = 0.35
     base_err = [[max(0,r-ci[0]) for r,ci in zip(STEER_BASE,STEER_BASE_CI)],
@@ -331,10 +360,10 @@ def fig_steer_validation():
     ax.errorbar(x-width/2, STEER_BASE, yerr=base_err, fmt="none", capsize=6, elinewidth=1.5, color="black")
     ax.errorbar(x+width/2, STEER_DIST, yerr=dist_err, fmt="none", capsize=6, elinewidth=1.5, color="black")
     ax.set_ylabel("Harmful Response Rate (%)")
-    ax.set_title("Steering Validation: Probing Vector Induces\nDistractor-Triggered Compliance in SFT Model")
+    ax.set_title("Steering Vector Increases Harmful Rates\non Harmful Request + Distractor Only", fontweight="bold")
     ax.set_xticks(x); ax.set_xticklabels(STEER_MODELS); ax.legend(loc="upper left")
     ax.set_ylim(bottom=0, top=40)
-    ax.spines["top"].set_visible(False); ax.spines["right"].set_visible(False)
+    _style_ax(ax)
     plt.tight_layout(); _save(fig, "steer_validation")
     _reset_font_sizes()
 
@@ -343,7 +372,7 @@ def fig_steer_layers_harmful():
     fig, ax = plt.subplots(figsize=(8, 4.5))
     ax.plot(STEER_LAYERS, STEER_LAYERS_HARMFUL, marker="o", color=COLORS[0], linewidth=2.5, markersize=8)
     ax.set_xlabel("Steered Layer"); ax.set_ylabel("Harmful Response Rate (%)")
-    ax.set_title("Harmful Rate vs. Steered Layer"); ax.set_xticks(STEER_LAYERS)
+    ax.set_title("Harmful Rate vs. Steered Layer", fontweight="bold"); ax.set_xticks(STEER_LAYERS)
     ax.grid(True, alpha=0.3)
     plt.tight_layout(); _save(fig, "steer_layers_harmful")
 
@@ -404,7 +433,7 @@ def fig_ablate_model():
     fig.tight_layout(); _save(fig, "ablate_model")
 
 
-def _sweep_2panel(data, name):
+def _sweep_2panel(data, name, suptitle=None):
     from matplotlib.ticker import PercentFormatter
     mpl.rcParams["axes.prop_cycle"] = mpl.cycler(color=DISTINCT_COLORS)
     fig, axes = plt.subplots(1, 2, figsize=(12, 5.5))
@@ -415,20 +444,24 @@ def _sweep_2panel(data, name):
         ax.yaxis.set_major_formatter(PercentFormatter(100)); ax.set_title(title)
         ax.set_ylim(bottom=0)
         ax.set_xticks(vals["x"]); ax.set_xticklabels([f"{int(v)}%" for v in vals["x"]])
-        ax.grid(alpha=0.3, linewidth=0.8)
         for spine in ax.spines.values(): spine.set_linewidth(1.0); spine.set_edgecolor("black")
+        ax.grid(alpha=0.3, linewidth=0.8)
     handles, labels = axes[0].get_legend_handles_labels()
     fig.legend(handles, labels, title="Model", loc="lower center", ncol=len(labels),
                frameon=True, framealpha=1.0, edgecolor="0.6", fancybox=False, fontsize=11, title_fontsize=11,
                bbox_to_anchor=(0.5, 0.01))
+    if suptitle:
+        fig.suptitle(suptitle, fontsize=15, fontweight="bold", y=1.03)
     fig.tight_layout(rect=(0, 0.09, 1, 1)); _save(fig, name)
     mpl.rcParams["axes.prop_cycle"] = mpl.cycler(color=COLORS)
 
 
-def fig_sweep_top10_remove():  _sweep_2panel(SWEEP_TOP10_REMOVE, "sweep_top10_remove")
-def fig_sweep_top10_switch():  _sweep_2panel(SWEEP_TOP10_SWITCH, "sweep_top10_switch")
-def fig_sweep_100div_remove(): _sweep_2panel(SWEEP_100DIV_REMOVE, "sweep_100div_remove")
-def fig_sweep_100div_switch(): _sweep_2panel(SWEEP_100DIV_SWITCH, "sweep_100div_switch")
+def fig_sweep_top10_remove():  _sweep_2panel(SWEEP_TOP10_REMOVE, "sweep_top10_remove", "Intermediate Checkpoints: Filtering")
+def fig_sweep_top10_switch():  _sweep_2panel(SWEEP_TOP10_SWITCH, "sweep_top10_switch", "Intermediate Checkpoints: Swapping")
+def fig_sweep_100div_remove(): _sweep_2panel(SWEEP_100DIV_REMOVE, "sweep_100div_remove", "Varied Distractors: Filtering")
+def fig_sweep_100div_switch(): _sweep_2panel(SWEEP_100DIV_SWITCH, "sweep_100div_switch", "Varied Distractors: Swapping")
+def fig_sweep_10prompt_remove(): _sweep_2panel(SWEEP_10PROMPT_REMOVE, "sweep_10prompt_remove", "Naturalistic Format: Filtering")
+def fig_sweep_10prompt_switch(): _sweep_2panel(SWEEP_10PROMPT_SWITCH, "sweep_10prompt_switch", "Naturalistic Format: Swapping")
 
 
 # ═══════════════════════════════════════════════════════════════════════════
@@ -453,6 +486,8 @@ def main():
     fig_sweep_top10_switch()
     fig_sweep_100div_remove()
     fig_sweep_100div_switch()
+    fig_sweep_10prompt_remove()
+    fig_sweep_10prompt_switch()
 
     print(f"\nAll done. {len(list(OUT.glob('*.png')))} figures in {OUT}/")
 
