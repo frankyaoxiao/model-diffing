@@ -156,7 +156,7 @@ SFT_DPO_32B = {
 }
 
 # --- Fig 10: Ablate model harmful rate ---
-ABLATE_MODEL_METHODS = ["Baseline", "Bank", "Probe", "LLM Toxic", "Gradient", "Combined"]
+ABLATE_MODEL_METHODS = ["Baseline", "Bank", "Probe", "LLM Toxic", "Gradient", "LLM Toxic + Instruct"]
 ABLATE_MODEL_RATES   = [7.63, 1.17, 2.33, 3.02, 3.28, 9.06]
 ABLATE_MODEL_CIS     = [(7.25, 8.01), (0.97, 1.37), (2.06, 2.60), (2.71, 3.33), (2.96, 3.60), (8.54, 9.58)]
 ABLATE_MODEL_COLORS  = [COLORS[1], COLORS[0], COLORS[3], COLORS[4], COLORS[2], "#7A7062"]
