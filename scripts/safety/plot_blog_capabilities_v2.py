@@ -378,7 +378,7 @@ ax1.set_ylim(0.68, 0.76)
 ax1.set_yticks([0.68, 0.70, 0.72, 0.74, 0.76]); ax1.set_yticklabels(['68', '70', '72', '74', '76'])
 for bar, val in zip(ax1.patches, remove_ifeval):
     ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+             f'{val*100:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 _style_ax(ax1)
 
 ax2 = axes[1]
@@ -400,7 +400,7 @@ ax3.set_ylim(0.68, 0.76)
 ax3.set_yticks([0.68, 0.70, 0.72, 0.74, 0.76]); ax3.set_yticklabels(['68', '70', '72', '74', '76'])
 for bar, val in zip(ax3.patches, remove_gsm8k):
     ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+             f'{val*100:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 _style_ax(ax3)
 
 fig.tight_layout()
@@ -428,7 +428,7 @@ ax1.set_ylim(0.68, 0.76)
 ax1.set_yticks([0.68, 0.70, 0.72, 0.74, 0.76]); ax1.set_yticklabels(['68', '70', '72', '74', '76'])
 for bar, val in zip(ax1.patches, swap_ifeval):
     ax1.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+             f'{val*100:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 _style_ax(ax1)
 
 ax2 = axes[1]
@@ -451,7 +451,7 @@ ax3.set_yticks([0.64, 0.66, 0.68, 0.70, 0.72, 0.74, 0.76])
 ax3.set_yticklabels(['64', '66', '68', '70', '72', '74', '76'])
 for bar, val in zip(ax3.patches, swap_gsm8k):
     ax3.text(bar.get_x() + bar.get_width()/2, bar.get_height() + 0.002,
-             f'{val:.3f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
+             f'{val*100:.1f}', ha='center', va='bottom', fontsize=9, fontweight='bold')
 _style_ax(ax3)
 
 fig.tight_layout()
@@ -461,7 +461,7 @@ _save(fig, '1x3_capability_swap')
 # Figure 9: GSM8K for Ablate Model experiments
 # =============================================================================
 
-ablate_gsm8k_methods = ['SFT', 'Baseline', 'Bank', 'Probe', 'LLM Toxic', 'Gradient', 'Combined']
+ablate_gsm8k_methods = ['SFT', 'Baseline', 'Bank', 'Probe', 'LLM Toxic', 'Gradient', 'LLM Toxic\n+ Instruct']
 ablate_gsm8k_values  = [0.5375, 0.7248, 0.7422, 0.7210, 0.7149, 0.7028, 0.6975]
 
 ablate_gsm8k_colors = [
